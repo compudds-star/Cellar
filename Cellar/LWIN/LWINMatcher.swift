@@ -22,19 +22,23 @@ struct LWINMatcher {
                vintage: Int? = nil,
                limit: Int = 8,
                minimumScore: Double = 0.15) -> [LWINMatch] {
+        // Still loading (e.g. called from the Add form right after launch): no matches yet.
+        guard database.isLoaded else { return [] }
         let queryTokens = LWINText.tokens([producer, name].joined(separator: " "))
         guard !queryTokens.isEmpty else { return [] }
+        let queryIDs = database.tokenIDs(for: queryTokens)
         let regionTokens = LWINText.tokens(region)
         let thisYear = Calendar.current.component(.year, from: .now)
 
         var scored: [LWINMatch] = []
         for idx in database.candidateIndices(for: queryTokens) {
-            let recTokens = database.tokens(at: idx)
-            let inter = queryTokens.intersection(recTokens).count
+            let recIDs = database.tokenIDs(at: idx)
+            let inter = recIDs.reduce(0) { $0 + (queryIDs.contains($1) ? 1 : 0) }
             guard inter > 0 else { continue }
 
+            // Unknown query tokens still count against recall and in the union.
             let recall = Double(inter) / Double(queryTokens.count)
-            let jaccard = Double(inter) / Double(queryTokens.union(recTokens).count)
+            let jaccard = Double(inter) / Double(queryTokens.count + recIDs.count - inter)
             var score = 0.7 * recall + 0.3 * jaccard
 
             let rec = database.records[idx]

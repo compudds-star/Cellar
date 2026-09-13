@@ -83,3 +83,39 @@ final class LWINCSVTests: XCTestCase {
         XCTAssertEqual(recs.first?.lwin7, "9000002")
     }
 }
+
+final class LWINCSVFormatTests: XCTestCase {
+
+    func testParsesSpreadsheetStyleCSV() {
+        // BOM + CRLF line endings (Excel/Numbers export), a quoted comma, an escaped
+        // quote, and retired rows that must be skipped.
+        let csv = "\u{FEFF}LWIN,STATUS,DISPLAY_NAME,PRODUCER_NAME,WINE,COUNTRY,REGION,FIRST_VINTAGE\r\n"
+            + "1000001,Live,\"Opus One, Napa Valley\",Opus One,\"The \"\"One\"\"\",USA,California,1979\r\n"
+            + "1000002,Deleted,Old Wine,Old,Old,USA,California,1990\r\n"
+            + "1000003,Combined,Merged Wine,Merged,Merged,France,Bordeaux,1990\r\n"
+            + "10000011979,Live,Opus One 1979,Opus One,Opus One,USA,California,1979\r\n"
+        let records = LWINCSV.parse(csv)
+        XCTAssertEqual(records.map(\.lwin7), ["1000001"])
+        XCTAssertEqual(records.first?.displayName, "Opus One, Napa Valley")
+        XCTAssertEqual(records.first?.wine, "The \"One\"")
+        XCTAssertEqual(records.first?.firstVintage, 1979)
+    }
+
+    func testLineEndingsAndQuotedNewlines() {
+        XCTAssertEqual(LWINCSV.splitRows("a,b\r\nc,d\re,f\ng,\"h\ni\"\n\n"),
+                       [["a", "b"], ["c", "d"], ["e", "f"], ["g", "h\ni"]])
+    }
+
+    func testConcurrentLoadIngestsOnce() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "lwin_sample", withExtension: "csv"))
+        let expected = LWINCSV.parse(data: try Data(contentsOf: url)).count
+        let db = LWINDatabase()
+        DispatchQueue.concurrentPerform(iterations: 8) { _ in db.loadIfNeeded() }
+        XCTAssertTrue(db.isLoaded)
+        XCTAssertEqual(db.records.count, expected)
+    }
+
+    func testMatchingBeforeLoadReturnsNothing() {
+        XCTAssertEqual(LWINMatcher(database: LWINDatabase()).match(producer: "Opus One", name: ""), [])
+    }
+}

@@ -23,7 +23,7 @@ struct LWINMatchView: View {
                     ContentUnavailableView {
                         Label("No LWIN match", systemImage: "questionmark.circle")
                     } description: {
-                        Text("Edit the producer or name and try again, or add the full LWIN database (see README).")
+                        Text("Edit the producer or name and try again.")
                     }
                 } else {
                     ForEach(matches) { m in
@@ -45,11 +45,14 @@ struct LWINMatchView: View {
                     }
                 }
 
-                if usingSample {
-                    Section {
-                        Text("Matching against the bundled sample list. Drop the full Liv-ex LWIN.csv into Resources/ for complete coverage.")
+                Section {
+                    if usingSample {
+                        Text("Matching against a small sample list. Add the full Liv-ex database with scripts/import_lwin.py for complete coverage.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    // Required credit: LWIN is licensed CC BY 4.0; the bundled file is a filtered subset.
+                    Text("LWIN data © [Liv-ex](https://www.liv-ex.com/lwin/), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Retired codes and unused columns removed.")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("LWIN match")
