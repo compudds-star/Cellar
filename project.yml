@@ -62,3 +62,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.doony.cellar.tests
         GENERATE_INFOPLIST_FILE: YES
+
+  CellarUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: CellarUITests
+    dependencies:
+      - target: Cellar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doony.cellar.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Cellar
