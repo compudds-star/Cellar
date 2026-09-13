@@ -107,6 +107,21 @@ Then in the app: **Settings → endpoint** = `https://wine.example.com`,
 **API key** = the `PROXY_TOKEN` value. The Wine-Searcher key stays only on the
 server.
 
+## Deploy with Docker behind an existing Caddy
+
+If the host already runs Caddy in Docker (as the Oracle Nextcloud box does),
+skip systemd/nginx and run the proxy as a container on Caddy's network:
+
+1. `rsync -az --exclude node_modules --exclude deploy proxy/ <host>:cellar-proxy/app/`
+2. Copy `deploy/docker-compose.yml` to `~/cellar-proxy/`, adjust `user:` and the
+   network name, create `.env` (see the file header), install deps, `up -d`.
+3. Point the domain's A record at the server, append `deploy/Caddyfile.snippet`
+   (with your domain) to the Caddyfile, then validate and reload Caddy.
+4. Check: `curl https://<domain>/health` → `{"ok":true,...}`
+
+Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = the
+`PROXY_TOKEN` from `.env`.
+
 ## Switching providers
 
 - `PROVIDER=mock` — no keys, fake-but-shaped data. Good for wiring/testing.

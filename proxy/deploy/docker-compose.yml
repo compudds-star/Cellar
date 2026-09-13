@@ -1,0 +1,29 @@
+# Cellar pricing proxy as a container behind an EXISTING Dockerized Caddy
+# (e.g. a Nextcloud stack). Copy to ~/cellar-proxy/docker-compose.yml, put the
+# proxy source in ~/cellar-proxy/app, and create ~/cellar-proxy/.env (0600):
+#   HOST=0.0.0.0
+#   PORT=8787
+#   PROVIDER=mock            # or winesearcher / apify (+ their keys)
+#   PROXY_TOKEN=<openssl rand -hex 32>
+# Install deps once, then start:
+#   docker compose run --rm --no-deps -e npm_config_cache=/tmp/.npm cellar-proxy npm ci --omit=dev
+#   docker compose up -d
+# No host ports are published; Caddy reaches it on the shared network.
+services:
+  cellar-proxy:
+    image: node:22-alpine
+    container_name: cellar-proxy
+    user: "1001:1001"   # uid:gid that owns ./app on the host (`id -u`)
+    working_dir: /app
+    command: ["node", "server.js"]
+    env_file: .env
+    volumes:
+      - ./app:/app
+    restart: unless-stopped
+    networks:
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true
+    name: nextcloud_nextcloud_net   # the network your Caddy container is on

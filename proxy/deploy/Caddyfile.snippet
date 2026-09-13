@@ -1,0 +1,17 @@
+# Append to the Caddyfile of a Dockerized Caddy that shares a network with the
+# cellar-proxy container, then validate + reload:
+#   docker exec <caddy> caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
+#   docker exec <caddy> caddy reload   --adapter caddyfile --config /etc/caddy/Caddyfile
+# Point the domain's DNS A record at the server first; Caddy gets the cert itself.
+wine.example.com {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	reverse_proxy cellar-proxy:8787
+}
