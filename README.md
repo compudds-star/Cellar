@@ -151,13 +151,16 @@ feature works immediately. The sample's codes start at `9000001` and are
 **illustrative, not authoritative** — replace them with the real database for
 full coverage and correct codes:
 
-1. Download the free LWIN database from Liv-ex (`liv-ex.com/lwin/`, Creative
-   Commons) as CSV.
-2. Drop it at `Cellar/Cellar/Resources/LWIN.csv`.
-3. Rebuild. `LWINDatabase` prefers `LWIN.csv` over the sample automatically; the
-   parser maps columns by header name (`LWIN`, `DISPLAY_NAME`, `PRODUCER_NAME`,
-   `WINE`, `COUNTRY`, `REGION`, `COLOUR`, `TYPE`, `FIRST_VINTAGE`,
-   `FINAL_VINTAGE`/`LATEST_VINTAGE`) so header order/extra columns don't matter.
+1. Download the free LWIN database from Liv-ex (`liv-ex.com/lwin/` → LWIN
+   database form; licensed **CC BY 4.0**). CSV or XLSX both work.
+2. Convert it: `python3 scripts/import_lwin.py ~/Downloads/<file>`. This writes a
+   trimmed `Cellar/Resources/LWIN.csv` (retired codes and unused columns removed,
+   LF line endings). Columns are matched by header name, so order doesn't matter.
+3. `xcodegen generate` (first time, so the new file is bundled), then rebuild.
+   `LWINDatabase` prefers `LWIN.csv` over the sample automatically.
+
+The LWIN match screen shows the Liv-ex credit that CC BY 4.0 requires; keep it if
+you change that screen.
 
 Because the sample codes aren't authoritative, don't feed a sample-derived
 `lwin7` to a pricing API as if it were real — swap in the Liv-ex file first.
