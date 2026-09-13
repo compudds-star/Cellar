@@ -178,38 +178,76 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
   return out;
 }
 
-// ---- Apify adapter (pay-per-result Wine-Searcher scraper) -------------------
+// ---- Apify adapter (abotapi~wine-searcher-scraper, pay-per-result) ----------
+// Input/output field names follow the actor's published input schema and
+// example output. The actor needs Apify residential proxies (a paid Apify plan);
+// the proxy country sets the price currency. The token goes in a header, never
+// the URL.
+const APIFY_COUNTRY = { USD: "US", GBP: "GB", EUR: "FR", CAD: "CA", AUD: "AU" };
+
 async function lookupApify({ q, lwin, vintage, currency }) {
   if (!APIFY_TOKEN) throw new Error("apify not configured");
-  const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${APIFY_TOKEN}`;
-  const r = await fetch(runUrl, {
+  const input = {
+    fetchOffers: true,
+    maxItems: 1,
+    proxy: {
+      useApifyProxy: true,
+      apifyProxyGroups: ["RESIDENTIAL"],
+      apifyProxyCountry: APIFY_COUNTRY[currency] ?? "US",
+    },
+  };
+  // Prefer the name: the app's bundled LWIN sample codes are illustrative.
+  if (q) {
+    input.inputType = "wineNames";
+    input.wineNames = [[q, vintage].filter(Boolean).join(" ")];
+  } else {
+    input.inputType = "lwins";
+    input.lwins = [lwin];
+  }
+
+  const r = await fetch(`https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ queries: [q || lwin], vintage, currency }),
-    signal: AbortSignal.timeout(60000),
+    headers: { "content-type": "application/json", authorization: `Bearer ${APIFY_TOKEN}` },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(120000),
   });
   if (!r.ok) throw new Error("apify http " + r.status);
   const items = await r.json();
   const first = Array.isArray(items) ? items[0] ?? {} : {};
-  const rawOffers = first.offers ?? [];
-  const offers = rawOffers.map((o) => ({
-    merchant: o.merchant ?? o.name ?? "Merchant",
-    price: num(o.price),
-    currency: o.currency ?? currency,
-    url: o.url ?? null,
-    address: o.address ?? null,
-    latitude: num(o.latitude),
-    longitude: num(o.longitude),
-    inStock: o.inStock ?? true,
-  }));
+  const priceCurrency = first.avgPriceCurrency ?? first.cheapestPriceCurrency ?? currency;
+
+  // Keep 750 mL listings only (cases are divided down to a per-bottle price),
+  // so offers compare with the app's per-750 mL valuation.
+  const offers = (Array.isArray(first.offers) ? first.offers : [])
+    .filter((o) => !o.unitDescription || /750\s*ml/i.test(o.unitDescription))
+    .map((o) => {
+      const perUnit = num(o.price);
+      const bottles = Number(o.bottlesPerUnit) > 1 ? Number(o.bottlesPerUnit) : 1;
+      return {
+        merchant: o.merchant ?? "Merchant",
+        price: perUnit === null ? null : Math.round((perUnit / bottles) * 100) / 100,
+        currency: o.priceCurrency ?? priceCurrency,
+        url: o.merchantUrl ?? first.wineSearcherUrl ?? null,
+        address: null,
+        latitude: null,
+        longitude: null,
+        inStock: o.availability ? /instock/i.test(o.availability) : true,
+      };
+    });
   const prices = offers.map((o) => o.price).filter((n) => typeof n === "number");
+
+  // The app shows scores on the 100-point scale.
+  let score = num(first.score);
+  const best = num(first.scoreBestRating);
+  if (score !== null && best && best !== 100) score = Math.round((score / best) * 100);
+
   const out = contract({
-    average: num(first.averagePrice ?? first.average) ?? (prices.length ? avg(prices) : null),
-    min: num(first.minPrice) ?? (prices.length ? Math.min(...prices) : null),
-    max: num(first.maxPrice) ?? (prices.length ? Math.max(...prices) : null),
-    currency,
-    score: num(first.score),
-    image: first.image ?? first.imageUrl ?? null,
+    average: num(first.avgPrice) ?? num(first.medianPriceAmount) ?? (prices.length ? avg(prices) : null),
+    min: num(first.cheapestPriceAmount) ?? (prices.length ? Math.min(...prices) : null),
+    max: num(first.highestPriceAmount) ?? (prices.length ? Math.max(...prices) : null),
+    currency: priceCurrency,
+    score,
+    image: first.labelImageUrl ?? null,
     offers,
   });
   if (process.env.DEBUG_UPSTREAM === "1") out._raw = first;
