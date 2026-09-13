@@ -56,6 +56,20 @@ final class ValuationServiceTests: XCTestCase {
         XCTAssertTrue(ValuationConfig(baseURL: URL(string: "http://localhost:8787"), apiKey: nil).isConfigured)
     }
 
+    func testLANHTTPEndpointIsAllowed() {
+        // A physical iPhone reaches the dev proxy on the Mac over Wi-Fi.
+        XCTAssertTrue(ValuationConfig(baseURL: URL(string: "http://192.168.68.114:8787"), apiKey: nil).isConfigured)
+        XCTAssertTrue(ValuationConfig(baseURL: URL(string: "http://10.0.0.5:8787"), apiKey: nil).isConfigured)
+        XCTAssertTrue(ValuationConfig(baseURL: URL(string: "http://172.20.1.2:8787"), apiKey: nil).isConfigured)
+        XCTAssertTrue(ValuationConfig(baseURL: URL(string: "http://my-mac.local:8787"), apiKey: nil).isConfigured)
+    }
+
+    func testPublicIPHTTPEndpointIsRejected() {
+        XCTAssertFalse(ValuationConfig(baseURL: URL(string: "http://8.8.8.8:8787"), apiKey: nil).isConfigured)
+        XCTAssertFalse(ValuationConfig(baseURL: URL(string: "http://172.32.0.1"), apiKey: nil).isConfigured)
+        XCTAssertFalse(ValuationConfig(baseURL: URL(string: "http://192.168.1.300"), apiKey: nil).isConfigured)
+    }
+
     func testHTTPSEndpointIsConfigured() {
         let cfg = ValuationConfig(baseURL: URL(string: "https://host.example.com/api"), apiKey: "k")
         XCTAssertTrue(cfg.isConfigured)

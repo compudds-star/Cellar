@@ -23,8 +23,17 @@ You'll get back the contract JSON. Point the app's Settings → endpoint at
 locally; TLS is added by nginx only on the Oracle host). The app allows cleartext
 to localhost via `NSAllowsLocalNetworking`, so this works on the simulator.
 On a physical iPhone, `127.0.0.1` is the phone itself — use your Mac's LAN IP
-instead (e.g. `http://192.168.1.20:8787`). Device/App Store use needs the HTTPS
-domain (see below).
+instead (e.g. `http://192.168.1.20:8787`, or `http://Your-Mac.local:8787`), and
+start the proxy bound to all interfaces so the phone can reach it:
+
+```bash
+HOST=0.0.0.0 PROVIDER=mock PORT=8787 npm start
+ipconfig getifaddr en0        # your Mac's LAN IP
+```
+
+iOS asks once for Local Network access — tap Allow. The app accepts plain http
+only for localhost, `*.local`, and private LAN addresses (10/8, 172.16/12,
+192.168/16). Device/App Store use needs the HTTPS domain (see below).
 
 ### Fixing the Wine-Searcher field mapping
 

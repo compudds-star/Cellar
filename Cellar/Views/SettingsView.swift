@@ -14,15 +14,15 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Pricing endpoint") {
-                    TextField("https://your-host/api", text: $baseURLText)
+                    TextField("https://your-host or http://192.168.1.20:8787", text: $baseURLText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
                     if invalidURL {
-                        Text("Enter a valid https:// URL, or leave blank to disable online pricing.")
+                        Text("Use https://, or http:// only for a local proxy (localhost, *.local, or a 192.168/10/172.16 address). Leave blank to disable online pricing.")
                             .font(.caption).foregroundStyle(.red)
                     }
-                    Text("Must be HTTPS. Recommended: a small proxy on your own host that holds the provider key and caches results.")
+                    Text("HTTPS for real hosts. Plain http:// works only for a dev proxy on your Mac — on an iPhone use the Mac's LAN address, not 127.0.0.1.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -65,7 +65,7 @@ struct SettingsView: View {
         if trimmed.isEmpty {
             ValuationSettings.baseURL = nil
         } else {
-            guard let url = URL(string: trimmed), url.scheme?.lowercased() == "https" else {
+            guard let url = URL(string: trimmed), ValuationConfig.isAcceptableEndpoint(url) else {
                 invalidURL = true
                 return
             }

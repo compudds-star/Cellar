@@ -24,9 +24,11 @@ struct ValuationConfig {
     }
 
     /// HTTPS is required for real hosts. Plain HTTP is allowed ONLY for a local
-    /// dev proxy (localhost / 127.0.0.1 / *.local) so you can test against the
-    /// proxy on your Mac before it's behind TLS. Info.plist's
-    /// NSAllowsLocalNetworking permits the cleartext connection for those hosts.
+    /// dev proxy so you can test against the proxy on your Mac before it's behind
+    /// TLS: localhost / 127.0.0.1 (simulator), or *.local / a private LAN IPv4
+    /// address (a physical iPhone reaching the Mac over Wi-Fi). Info.plist's
+    /// NSAllowsLocalNetworking permits cleartext to local names; ATS doesn't
+    /// apply to IP literals.
     static func isAcceptableEndpoint(_ url: URL) -> Bool {
         switch url.scheme?.lowercased() {
         case "https":
@@ -34,8 +36,21 @@ struct ValuationConfig {
         case "http":
             guard let host = url.host?.lowercased() else { return false }
             return host == "localhost" || host == "127.0.0.1" || host.hasSuffix(".local")
+                || isPrivateIPv4(host)
         default:
             return false
+        }
+    }
+
+    /// 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16.
+    static func isPrivateIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false).compactMap { UInt8($0) }
+        guard parts.count == 4 else { return false }
+        switch (parts[0], parts[1]) {
+        case (10, _): return true
+        case (172, 16...31): return true
+        case (192, 168): return true
+        default: return false
         }
     }
 }

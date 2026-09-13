@@ -95,6 +95,55 @@ final class CellarSmokeUITests: XCTestCase {
         }
     }
 
+    /// Online pricing through a plain-http dev proxy on this Mac. Skipped unless
+    /// the proxy is running: `cd proxy && PROVIDER=mock npm start`.
+    func testPricingViaLocalProxy() throws {
+        try XCTSkipUnless(proxyIsRunning(), "Start the proxy: cd proxy && PROVIDER=mock npm start")
+        let producer = "Opus One \(Int(Date().timeIntervalSince1970) % 100000)"
+
+        // Settings must accept an http:// endpoint for a local proxy.
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Settings"].tap()
+        let endpoint = app.textFields.firstMatch
+        XCTAssertTrue(endpoint.waitForExistence(timeout: 5))
+        endpoint.tap()
+        if let existing = endpoint.value as? String, existing.hasPrefix("http") {
+            endpoint.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+        }
+        endpoint.typeText("http://127.0.0.1:8787")
+        app.navigationBars["Pricing"].buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Pricing"].waitForNonExistence(timeout: 5),
+                      "Settings rejected the http endpoint")
+
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        type(producer, into: app.textFields["Producer"])
+        type("2018", into: app.textFields["Vintage (blank = NV)"])
+        app.navigationBars["Add wine"].buttons["Save"].tap()
+        let row = cell(containing: producer)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+
+        tap(app.buttons["Refresh price online"])
+        let provenance = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From '")).firstMatch
+        XCTAssertTrue(provenance.waitForExistence(timeout: 20), "no price came back from the proxy")
+        XCTAssertFalse(app.alerts["Couldn't fetch price"].exists)
+        snapshot("09-price-refreshed")
+    }
+
+    private func proxyIsRunning() -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:8787/health") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        let done = DispatchSemaphore(value: 0)
+        var ok = false
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            ok = (response as? HTTPURLResponse)?.statusCode == 200
+            done.signal()
+        }.resume()
+        _ = done.wait(timeout: .now() + 3)
+        return ok
+    }
+
     // MARK: - Helpers
 
     private func dismissSystemAlerts() {
