@@ -1,5 +1,7 @@
 import Foundation
 import SwiftData
+import Observation
+import os
 
 /// Orchestrates pricing: picks the remote service when an endpoint is
 /// configured (else nothing), enforces a cache TTL so a paid API is hit at most
@@ -68,5 +70,36 @@ enum ValuationCoordinator {
             context.insert(option)
         }
         return result != nil || !offers.isEmpty
+    }
+}
+
+/// Background price lookups started when wines or bottles are added. Tracks which
+/// wines are in flight so screens can show "Looking up price…".
+@MainActor
+@Observable
+final class PriceLookup {
+    static let shared = PriceLookup()
+    private(set) var inFlight: Set<UUID> = []
+    private static let log = Logger(subsystem: "com.doony.cellar", category: "pricing")
+
+    /// Refreshes the wine's valuation and offers without blocking the UI. Skips
+    /// quietly when no pricing endpoint is set or the price is still fresh (7-day
+    /// cache, so a paid API isn't hit again for every bottle added). Failures are
+    /// logged; the manual "Refresh price online" button still reports errors.
+    static func start(for wine: Wine, context: ModelContext) {
+        guard ValuationCoordinator.isConfigured, !ValuationCoordinator.isFresh(wine) else { return }
+        shared.run(wine, context: context)
+    }
+
+    private func run(_ wine: Wine, context: ModelContext) {
+        guard inFlight.insert(wine.id).inserted else { return }
+        Task {
+            defer { inFlight.remove(wine.id) }
+            do {
+                try await ValuationCoordinator.refresh(wine, context: context)
+            } catch {
+                Self.log.info("Automatic price lookup failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 }

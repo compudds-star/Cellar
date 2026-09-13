@@ -88,7 +88,12 @@ struct AddWineFlow: View {
                     TextField("Vintage (blank = NV)", text: $vintageText)
                         .keyboardType(.numberPad)
                     Picker("Type", selection: $type) {
-                        ForEach(WineType.allCases) { Text($0.label).tag($0) }
+                        Section("Wine") {
+                            ForEach(WineType.wines) { Text($0.label).tag($0) }
+                        }
+                        Section("Spirits") {
+                            ForEach(WineType.spirits) { Text($0.label).tag($0) }
+                        }
                     }
                 }
 
@@ -145,7 +150,7 @@ struct AddWineFlow: View {
                         ForEach(BottleSize.allCases) { Text($0.label).tag($0) }
                     }
                     HStack {
-                        Text("Price paid (each)")
+                        Text("Price paid (per bottle)")
                         Spacer()
                         TextField("0.00", text: $priceText)
                             .keyboardType(.decimalPad)
@@ -233,15 +238,10 @@ struct AddWineFlow: View {
         if name.isEmpty { name = record.wine }
         if region.isEmpty { region = record.region }
         if country.isEmpty { country = record.country }
-        // Derive type from the record's colour/type when we don't already have one.
-        let colour = record.colour.lowercased()
-        let recType = record.type.lowercased()
-        if recType.contains("sparkling") { type = .sparkling }
-        else if recType.contains("fortified") { type = .fortified }
-        else if ["spirit", "cider", "sake", "vermouth"].contains(where: recType.contains) { type = .other }
-        else if colour.contains("ros") { type = .rose }
-        else if colour.contains("white") { type = .white }
-        else if colour.contains("red") { type = .red }
+        // Type from the record: sparkling, fortified, spirit category, or colour.
+        if let recordType = WineType(lwinType: record.type, colour: record.colour) {
+            type = recordType
+        }
     }
 
     private func save() {
@@ -256,13 +256,13 @@ struct AddWineFlow: View {
             lwin7: lwin7,
             labelImage: labelImage,
             notes: notes,
-            manualEstimatedValue: Decimal(string: estimateText),
+            manualEstimatedValue: BottleDraft.decimal(from: estimateText),
             rating: rating > 0 ? rating : nil,
             isWishlist: destination == .wishlist)
         context.insert(wine)
 
         if destination == .cellar {
-            let price = Decimal(string: priceText)
+            let price = BottleDraft.decimal(from: priceText)
             for _ in 0..<quantity {
                 let bottle = Bottle(size: size,
                                     purchasePrice: price,
@@ -276,6 +276,8 @@ struct AddWineFlow: View {
             // Schedule drink-window reminders for the newly added bottles.
             Task { DrinkWindowNotifier.schedule(for: wine) }
         }
+        // Look up the market price in the background (skipped if no endpoint is set).
+        PriceLookup.start(for: wine, context: context)
         dismiss()
     }
 }

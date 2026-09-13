@@ -66,7 +66,8 @@ enum LabelParser {
         "mis en bouteille", "imported by", "sulfite", "sulphite", "government warning",
         "contains", "appellation", "denominazione", "denominación", "estate bottled",
         "red wine", "white wine", "table wine", "vin rouge", "vin blanc", "vino rosso",
-        "vino tinto", "www.", ".com"
+        "vino tinto", "www.", ".com", "scotch whisky", "single malt", "blended scotch",
+        "straight bourbon", "proof"
     ]
 
     static func parse(lines rawLines: [String]) -> ParsedLabel {
@@ -108,6 +109,11 @@ enum LabelParser {
             result.type = .sparkling
         } else if !wordSet.isDisjoint(with: rose) {
             result.type = .rose
+        }
+
+        // Spirits override wine cues ("Grande Champagne Cognac" is brandy, not sparkling).
+        if let spirit = spiritType(words: words, texts: texts) {
+            result.type = spirit
         }
 
         // Producer / name: the most prominent lines that aren't the vintage,
@@ -218,6 +224,37 @@ enum LabelParser {
             prev = cur
         }
         return prev[b.count]
+    }
+
+    /// Spirit category from style words on the label, else "some spirit" when the
+    /// stated strength is spirit-level (wine tops out around 22%).
+    static func spiritType(words: [String], texts: [String]) -> WineType? {
+        let set = Set(words)
+        if !set.isDisjoint(with: ["whisky", "whiskey", "scotch", "bourbon"])
+            || matches(phrase: "single malt", in: words) { return .whisky }
+        if !set.isDisjoint(with: ["cognac", "armagnac", "brandy", "calvados", "pisco"]) { return .brandy }
+        if !set.isDisjoint(with: ["rum", "rhum"]) { return .rum }
+        if set.contains("gin") { return .gin }
+        if set.contains("vodka") { return .vodka }
+        if !set.isDisjoint(with: ["tequila", "mezcal", "mescal"]) { return .tequila }
+        if !set.isDisjoint(with: ["liqueur", "amaro", "schnapps"]) { return .liqueur }
+        if let abv = highestABV(in: texts), abv >= 30 { return .spirit }
+        return nil
+    }
+
+    /// Largest "NN%" / "NN.N %" on the label, if any.
+    static func highestABV(in lines: [String]) -> Double? {
+        guard let re = try? NSRegularExpression(pattern: "(\\d{1,2}(?:[.,]\\d{1,2})?)\\s*%") else { return nil }
+        var best: Double?
+        for line in lines {
+            let range = NSRange(line.startIndex..., in: line)
+            for m in re.matches(in: line, range: range) {
+                guard let r = Range(m.range(at: 1), in: line),
+                      let v = Double(line[r].replacingOccurrences(of: ",", with: ".")) else { continue }
+                best = max(best ?? v, v)
+            }
+        }
+        return best
     }
 
     static func wineType(forVarietal v: String) -> WineType {

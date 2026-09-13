@@ -57,7 +57,8 @@ Cellar/                      app source (Swift)
 ├── Models/
 │   ├── Wine.swift           Wine (identity + rating 1–5 + communityScore + isWishlist
 │   │                        + lwin7 + imageURL), Bottle, ValuationSnapshot,
-│   │                        PurchaseOption, enums (WineType has .tint)
+│   │                        PurchaseOption, enums (WineType: wine styles + spirit
+│   │                        categories, .tint, .isSpirit, init(lwinType:colour:))
 │   └── TastingNote.swift     dated note + optional 1–5 score
 ├── Scan/                    VisionKit DataScanner live OCR (+ capturePhoto for the
 │                            label image), Vision still-photo fallback, LabelParser (pure)
@@ -67,7 +68,8 @@ Cellar/                      app source (Swift)
 ├── Valuation/              ValuationService/PurchaseService protocols; Manual + Remote
 │                            clients; ValuationConfig (endpoint in UserDefaults, API key
 │                            in Keychain); ValuationCoordinator (7-day cache, persists
-│                            snapshots + offers); CellarStats (pure aggregation)
+│                            snapshots + offers) + PriceLookup (automatic lookup when
+│                            wines/bottles are added); CellarStats (pure aggregation)
 ├── Purchase/               MerchantOffer, NearbyStores (MapKit + one-shot location)
 ├── Export/                 CSV + PDF exporters
 ├── Notifications/          DrinkWindowNotifier (local notifications)
@@ -76,7 +78,8 @@ Cellar/                      app source (Swift)
                             WineDetailView, AddWineFlow, WishlistView, WhereToBuyView,
                             CellarDashboardView (Swift Charts + export menu),
                             SettingsView (endpoint+key), LWINMatchView, ScanSheet,
-                            ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail)
+                            ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
+                            BottleEditorView (add/edit bottles: price paid, date, storage, drink window)
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv

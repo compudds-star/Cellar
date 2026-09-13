@@ -47,6 +47,7 @@ struct WishlistView: View {
         let bottle = Bottle(size: .standard)
         context.insert(bottle)
         wine.bottles.append(bottle)
+        PriceLookup.start(for: wine, context: context)
     }
 
     private func delete(at offsets: IndexSet) {

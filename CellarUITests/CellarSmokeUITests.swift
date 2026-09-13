@@ -46,10 +46,17 @@ final class CellarSmokeUITests: XCTestCase {
         type("Dark cherry, firm tannins", into: noteField)
         tap(element(labeled: "3 stars", last: true))
         tap(app.buttons["Add a bottle"])
+        XCTAssertTrue(app.navigationBars["Add bottles"].waitForExistence(timeout: 5), "bottle editor didn't open")
+        type("72", into: app.textFields["0.00"].firstMatch)
+        snapshot("03a-add-bottle")
+        app.navigationBars["Add bottles"].buttons["Save"].tap()
         // Section headers are uppercased in the accessibility label.
         let bottlesHeader = app.staticTexts.matching(
             NSPredicate(format: "label ==[c] %@", "Bottles (2 in stock)")).firstMatch
         XCTAssertTrue(bottlesHeader.waitForExistence(timeout: 5), "second bottle not added")
+        XCTAssertTrue(app.descendants(matching: .any)
+                        .matching(NSPredicate(format: "label CONTAINS %@", "Paid $72.00")).firstMatch
+                        .waitForExistence(timeout: 5), "price paid not shown on the new bottle")
         snapshot("03-wine-detail")
 
         tap(app.buttons["Where to buy"])
@@ -123,9 +130,9 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
-        tap(app.buttons["Refresh price online"])
+        // Saving the wine started a lookup automatically — no Refresh tap needed.
         let provenance = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From '")).firstMatch
-        XCTAssertTrue(provenance.waitForExistence(timeout: 20), "no price came back from the proxy")
+        XCTAssertTrue(provenance.waitForExistence(timeout: 30), "price wasn't looked up automatically")
         XCTAssertFalse(app.alerts["Couldn't fetch price"].exists)
         snapshot("09-price-refreshed")
     }

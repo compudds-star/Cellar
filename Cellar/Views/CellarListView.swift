@@ -66,9 +66,15 @@ struct CellarListView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
                         Button("All types") { typeFilter = nil }
-                        Divider()
-                        ForEach(WineType.allCases) { t in
-                            Button(t.label) { typeFilter = t }
+                        Section("Wine") {
+                            ForEach(WineType.wines) { t in
+                                Button(t.label) { typeFilter = t }
+                            }
+                        }
+                        Section("Spirits") {
+                            ForEach(WineType.spirits) { t in
+                                Button(t.label) { typeFilter = t }
+                            }
                         }
                     } label: {
                         Label("Filter", systemImage: "line.3.horizontal.decrease.circle")

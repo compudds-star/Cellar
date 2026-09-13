@@ -8,6 +8,8 @@ struct WineDetailView: View {
     @State private var editingEstimate = false
     @State private var refreshing = false
     @State private var errorMessage: String?
+    @State private var addingBottles = false
+    @State private var editingBottle: Bottle?
 
     var body: some View {
         List {
@@ -53,6 +55,13 @@ struct WineDetailView: View {
                     Spacer()
                     Text(Money.string(wine.totalEstimatedValue)).fontWeight(.semibold)
                 }
+                if let paid = wine.totalPaidInStock {
+                    HStack {
+                        Text("You paid")
+                        Spacer()
+                        Text(Money.string(paid)).foregroundStyle(.secondary)
+                    }
+                }
                 if let best = wine.bestOfferPrice {
                     HStack {
                         Text("Best online price")
@@ -63,6 +72,12 @@ struct WineDetailView: View {
                 if let snap = wine.latestValuation {
                     Text("From \(snap.source), \(snap.asOf.formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                if PriceLookup.shared.inFlight.contains(wine.id) {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Looking up price…").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Button {
                     Task { await refreshPrice() }
@@ -99,6 +114,7 @@ struct WineDetailView: View {
                         let bottle = Bottle(size: .standard)
                         context.insert(bottle)
                         wine.bottles.append(bottle)
+                        PriceLookup.start(for: wine, context: context)
                     } label: {
                         Label("Move to cellar", systemImage: "tray.and.arrow.down")
                     }
@@ -121,12 +137,14 @@ struct WineDetailView: View {
 
             Section("Bottles (\(wine.inStockCount) in stock)") {
                 ForEach(wine.bottles.sorted { $0.addedAt < $1.addedAt }) { bottle in
-                    BottleRow(bottle: bottle)
+                    BottleRow(bottle: bottle) {
+                        endEditing()
+                        editingBottle = bottle
+                    }
                 }
                 Button {
-                    let b = Bottle(size: .standard)
-                    context.insert(b)
-                    wine.bottles.append(b)
+                    endEditing()
+                    addingBottles = true
                 } label: {
                     Label("Add a bottle", systemImage: "plus")
                 }
@@ -146,6 +164,15 @@ struct WineDetailView: View {
         }
         .navigationTitle(wine.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // Scrolling puts the keyboard away, so a focused tasting note doesn't pin the
+        // page (focus returns to it when the bottle editor closes).
+        .scrollDismissesKeyboard(.immediately)
+        .sheet(isPresented: $addingBottles) {
+            BottleEditorView(wine: wine)
+        }
+        .sheet(item: $editingBottle) { bottle in
+            BottleEditorView(wine: wine, bottle: bottle)
+        }
         .alert("Couldn't fetch price", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -167,6 +194,12 @@ struct WineDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Puts the keyboard away before opening the bottle editor. Otherwise focus
+    /// returns to a tasting note when the sheet closes and the keyboard pops back up.
+    private func endEditing() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private func deleteNotes(at offsets: IndexSet) {
@@ -230,19 +263,33 @@ struct TastingNoteRow: View {
 
 struct BottleRow: View {
     @Bindable var bottle: Bottle
+    /// Opens the bottle editor (price paid, date, storage, drink window).
+    var onEdit: () -> Void = {}
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(bottle.size.label).font(.subheadline)
-                if !bottle.storageLocation.isEmpty {
-                    Text(bottle.storageLocation).font(.caption).foregroundStyle(.secondary)
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bottle.size.label).font(.subheadline)
+                    if !bottle.storageLocation.isEmpty {
+                        Text(bottle.storageLocation).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let price = bottle.purchasePrice {
+                        let date = bottle.purchaseDate.map { " · \($0.formatted(date: .abbreviated, time: .omitted))" } ?? ""
+                        Text("Paid \(Money.string(price))\(date)").font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Add price paid").font(.caption).foregroundStyle(.tint)
+                    }
+                    if bottle.drinkFrom != nil || bottle.drinkTo != nil {
+                        Text("Drink \(bottle.drinkFrom.map(String.init) ?? "…")–\(bottle.drinkTo.map(String.init) ?? "…")")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                if let price = bottle.purchasePrice {
-                    Text("Paid \(Money.string(price))").font(.caption).foregroundStyle(.secondary)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .accessibilityHint("Edit bottle")
             Menu {
                 ForEach(BottleStatus.allCases) { s in
                     Button(s.label) {
