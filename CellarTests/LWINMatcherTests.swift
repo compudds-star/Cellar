@@ -171,3 +171,27 @@ final class LWINRankingTests: XCTestCase {
         XCTAssertEqual(records.first?.wine, "")
     }
 }
+
+final class LWINAgeStatementTests: XCTestCase {
+
+    func testAgeStatementsReduceToTheNumber() {
+        XCTAssertEqual(LWINText.tokens("Single Malt 16YO"), ["single", "malt", "16"])
+        XCTAssertEqual(LWINText.tokens("Aged 18 Years Old"), ["18"])
+        XCTAssertEqual(LWINText.tokens("Tawny 20yrs"), ["tawny", "20"])
+        XCTAssertEqual(LWINText.tokens("Crusted Bottled 2007"), ["crusted", "bottled", "2007"])
+    }
+
+    func testWhiskyAgeFindsTheRightBottling() {
+        func whisky(_ lwin7: String, _ wine: String) -> LWINRecord {
+            LWINRecord(lwin7: lwin7, displayName: "Lagavulin, \(wine), Islay", producerName: "Lagavulin",
+                       wine: wine, country: "Scotland", region: "Islay", colour: "",
+                       type: "Spirit (Whiskies)", firstVintage: nil, finalVintage: nil)
+        }
+        let db = LWINDatabase(records: [whisky("1530636", "Single Malt"),
+                                        whisky("1530623", "Single Malt 8YO"),
+                                        whisky("1397639", "Single Malt 16YO")])
+        let matches = LWINMatcher(database: db).bestMatches(producer: "Lagavulin", name: "16 Years Old", region: "Islay")
+        XCTAssertEqual(matches.first?.record.lwin7, "1397639")
+        XCTAssertEqual(LWINMatcher.confidentPick(matches)?.record.lwin7, "1397639")
+    }
+}

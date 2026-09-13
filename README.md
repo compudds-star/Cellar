@@ -154,20 +154,21 @@ full coverage and correct codes:
 1. Download the free LWIN database from Liv-ex (`liv-ex.com/lwin/` → LWIN
    database form; licensed **CC BY 4.0**). CSV or XLSX both work.
 2. Convert it: `python3 scripts/import_lwin.py ~/Downloads/<file>`. This writes a
-   trimmed `Cellar/Resources/LWIN.csv`: retired codes, spirits and cider (add
-   `--include-spirits` to keep them), mixed/assortment cases and unused columns
-   are removed; `TYPE` becomes Still / Sparkling / Fortified (Port) / …. Columns
+   trimmed `Cellar/Resources/LWIN.csv`: retired codes, mixed/assortment cases and
+   unused columns are removed (add `--exclude-spirits` for wine only); `TYPE`
+   becomes Still / Sparkling / Fortified (Port) / Spirit (Whiskies) / …. Columns
    are matched by header name, so order doesn't matter.
 3. `xcodegen generate` (first time, so the new file is bundled), then rebuild.
    `LWINDatabase` prefers `LWIN.csv` over the sample automatically.
 
-The repo includes a converted copy (Liv-ex download of 2026-09-13, ~185k wines,
-22 MB); re-run the script to refresh it. The LWIN match screen shows the Liv-ex
+The repo includes a converted copy (Liv-ex download of 2026-09-13, ~205k wines
+and spirits, 26 MB); re-run the script to refresh it. The LWIN match screen shows the Liv-ex
 credit that CC BY 4.0 requires; keep it if you change that screen.
 
 Matching indexes producer title + producer + wine (not the display name, whose
 classification/appellation words dilute scores), also tries the producer alone
-when a scan put a byline in the name, and the Add form only snaps automatically
+when a scan put a byline in the name, treats age statements alike ("16YO",
+"16 Years Old"), and the Add form only snaps automatically
 when the best match is confident and clearly ahead of the runner-up.
 
 Because the sample codes aren't authoritative, don't feed a sample-derived

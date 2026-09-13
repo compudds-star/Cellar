@@ -238,6 +238,7 @@ struct AddWineFlow: View {
         let recType = record.type.lowercased()
         if recType.contains("sparkling") { type = .sparkling }
         else if recType.contains("fortified") { type = .fortified }
+        else if ["spirit", "cider", "sake", "vermouth"].contains(where: recType.contains) { type = .other }
         else if colour.contains("ros") { type = .rose }
         else if colour.contains("white") { type = .white }
         else if colour.contains("red") { type = .red }

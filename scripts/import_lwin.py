@@ -3,14 +3,14 @@
 
 Usage:
     python3 scripts/import_lwin.py ~/Downloads/LWINdatabase.xlsx   # or .csv
-    python3 scripts/import_lwin.py <file> --include-spirits         # keep spirits/cider
+    python3 scripts/import_lwin.py <file> --exclude-spirits         # wine only
     xcodegen generate      # first time only, so Xcode bundles the new file
 
 Reads the official download (CSV or XLSX, no third-party packages), drops
-retired rows (STATUS Deleted/Combined), spirits and cider (unless
---include-spirits), mixed/assortment cases and placeholder rows; keeps one row
-per 7-digit LWIN and only the columns the app uses (TYPE becomes Still /
-Sparkling / Fortified (Port) / Sake …, from TYPE + SUB_TYPE), and writes UTF-8 with LF endings to
+retired rows (STATUS Deleted/Combined), mixed/assortment cases and placeholder
+rows (and spirits/cider with --exclude-spirits); keeps one row per 7-digit LWIN
+and only the columns the app uses (TYPE becomes Still / Sparkling /
+Fortified (Port) / Spirit (Whiskies) / Sake …, from TYPE + SUB_TYPE), and writes UTF-8 with LF endings to
 Cellar/Resources/LWIN.csv, which the app prefers over the bundled sample.
 
 LWIN data (c) Liv-ex, licensed CC BY 4.0: https://www.liv-ex.com/lwin/
@@ -99,7 +99,7 @@ def clean_number(s):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    include_spirits = "--include-spirits" in sys.argv[1:]
+    include_spirits = "--exclude-spirits" not in sys.argv[1:]
     if not args:
         sys.exit(__doc__)
     src = os.path.expanduser(args[0])
@@ -125,6 +125,8 @@ def main():
             return sub or "Still"
         if kind.lower() == "fortified wine":
             return f"Fortified ({sub})" if sub else "Fortified"
+        if kind.lower() == "spirit":
+            return f"Spirit ({sub})" if sub else "Spirit"
         return sub or kind
 
     seen, kept, retired, invalid, non_wine, packs = set(), 0, 0, 0, 0, 0

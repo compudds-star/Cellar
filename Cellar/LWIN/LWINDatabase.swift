@@ -8,7 +8,9 @@ enum LWINText {
         "the", "de", "du", "des", "di", "da", "del", "el", "la", "le", "les",
         "of", "and", "et", "vin", "wine",
         // Liv-ex keeps "Port" out of the wine name ("Dow's" / "Vintage"), but labels print it.
-        "port", "porto"
+        "port", "porto",
+        // Age statements reduce to the number ("16 Years Old", "Aged 16 Years" → "16").
+        "year", "years", "yr", "yrs", "yo", "old", "aged"
     ]
 
     static func normalize(_ s: String) -> String {
@@ -19,8 +21,17 @@ enum LWINText {
     static func tokens(_ s: String) -> Set<String> {
         let parts = normalize(s)
             .split { !$0.isLetter && !$0.isNumber }
-            .map(String.init)
+            .map { ageNumber(String($0)) }
         return Set(parts.filter { $0.count >= 2 && !stopwords.contains($0) })
+    }
+
+    /// "16yo" / "16y" / "16yrs" → "16", so LWIN's "Single Malt 16YO" matches a
+    /// label's "16 Years Old". Other tokens pass through unchanged.
+    static func ageNumber(_ token: String) -> String {
+        let digits = token.prefix { $0.isNumber }
+        guard !digits.isEmpty, digits.count <= 3 else { return token }
+        let suffix = String(token.dropFirst(digits.count))
+        return ["yo", "y", "yr", "yrs", "year", "years"].contains(suffix) ? String(digits) : token
     }
 }
 
