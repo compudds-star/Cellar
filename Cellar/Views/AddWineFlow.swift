@@ -254,8 +254,8 @@ struct AddWineFlow: View {
                                     storageLocation: storageLocation,
                                     drinkFrom: Int(drinkFromText),
                                     drinkTo: Int(drinkToText))
-                bottle.wine = wine
                 context.insert(bottle)
+                wine.bottles.append(bottle)
             }
             // Schedule drink-window reminders for the newly added bottles.
             Task { DrinkWindowNotifier.schedule(for: wine) }

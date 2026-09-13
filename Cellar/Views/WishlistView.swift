@@ -45,8 +45,8 @@ struct WishlistView: View {
     private func moveToCellar(_ wine: Wine) {
         wine.isWishlist = false
         let bottle = Bottle(size: .standard)
-        bottle.wine = wine
         context.insert(bottle)
+        wine.bottles.append(bottle)
     }
 
     private func delete(at offsets: IndexSet) {

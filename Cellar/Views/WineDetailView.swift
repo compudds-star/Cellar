@@ -97,8 +97,8 @@ struct WineDetailView: View {
                     Button {
                         wine.isWishlist = false
                         let bottle = Bottle(size: .standard)
-                        bottle.wine = wine
                         context.insert(bottle)
+                        wine.bottles.append(bottle)
                     } label: {
                         Label("Move to cellar", systemImage: "tray.and.arrow.down")
                     }
@@ -112,8 +112,8 @@ struct WineDetailView: View {
                 .onDelete(perform: deleteNotes)
                 Button {
                     let note = TastingNote(text: "")
-                    note.wine = wine
                     context.insert(note)
+                    wine.tastingNotes.append(note)
                 } label: {
                     Label("Add note", systemImage: "plus")
                 }
@@ -125,8 +125,8 @@ struct WineDetailView: View {
                 }
                 Button {
                     let b = Bottle(size: .standard)
-                    b.wine = wine
                     context.insert(b)
+                    wine.bottles.append(b)
                 } label: {
                     Label("Add a bottle", systemImage: "plus")
                 }
