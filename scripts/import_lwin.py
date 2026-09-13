@@ -3,11 +3,14 @@
 
 Usage:
     python3 scripts/import_lwin.py ~/Downloads/LWINdatabase.xlsx   # or .csv
+    python3 scripts/import_lwin.py <file> --include-spirits         # keep spirits/cider
     xcodegen generate      # first time only, so Xcode bundles the new file
 
 Reads the official download (CSV or XLSX, no third-party packages), drops
-retired rows (STATUS Deleted/Combined), keeps one row per 7-digit LWIN and only
-the columns the app uses, and writes UTF-8 with LF endings to
+retired rows (STATUS Deleted/Combined), spirits and cider (unless
+--include-spirits), mixed/assortment cases and placeholder rows; keeps one row
+per 7-digit LWIN and only the columns the app uses (TYPE becomes Still /
+Sparkling / Fortified (Port) / Sake …, from TYPE + SUB_TYPE), and writes UTF-8 with LF endings to
 Cellar/Resources/LWIN.csv, which the app prefers over the bundled sample.
 
 LWIN data (c) Liv-ex, licensed CC BY 4.0: https://www.liv-ex.com/lwin/
@@ -20,12 +23,14 @@ import sys
 import zipfile
 import xml.etree.ElementTree as ET
 
-OUT_COLUMNS = ["LWIN", "DISPLAY_NAME", "PRODUCER_NAME", "WINE", "COUNTRY", "REGION",
-               "COLOUR", "TYPE", "FIRST_VINTAGE", "FINAL_VINTAGE"]
+OUT_COLUMNS = ["LWIN", "DISPLAY_NAME", "PRODUCER_TITLE", "PRODUCER_NAME", "WINE", "COUNTRY",
+               "REGION", "COLOUR", "TYPE", "FIRST_VINTAGE", "FINAL_VINTAGE"]
 ALIASES = {
     "LWIN": ["LWIN", "LWIN7", "LWIN_7"],
     "STATUS": ["STATUS"],
     "DISPLAY_NAME": ["DISPLAY_NAME", "DISPLAYNAME"],
+    "PRODUCER_TITLE": ["PRODUCER_TITLE"],
+    "SUB_TYPE": ["SUB_TYPE"],
     "PRODUCER_NAME": ["PRODUCER_NAME", "PRODUCER"],
     "WINE": ["WINE"],
     "COUNTRY": ["COUNTRY"],
@@ -36,6 +41,9 @@ ALIASES = {
     "FINAL_VINTAGE": ["FINAL_VINTAGE", "LATEST_VINTAGE", "FINALVINTAGE"],
 }
 RETIRED = {"deleted", "combined"}
+EMPTY_MARKERS = {"NA", "N/A"}
+NON_WINE_TYPES = {"spirit", "cider"}
+PACK_MARKERS = ("assortment case", "mixed case", "standard lwin")
 NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 
 
@@ -90,11 +98,13 @@ def clean_number(s):
 
 
 def main():
-    if len(sys.argv) < 2:
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    include_spirits = "--include-spirits" in sys.argv[1:]
+    if not args:
         sys.exit(__doc__)
-    src = os.path.expanduser(sys.argv[1])
+    src = os.path.expanduser(args[0])
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(repo, "Cellar", "Resources", "LWIN.csv")
+    dst = args[1] if len(args) > 1 else os.path.join(repo, "Cellar", "Resources", "LWIN.csv")
 
     rows = read_xlsx(src) if src.lower().endswith(".xlsx") else read_csv(src)
     header = [h.strip().upper() for h in next(rows)]
@@ -106,15 +116,30 @@ def main():
 
     def get(fields, key):
         i = idx[key]
-        return fields[i].strip() if i is not None and i < len(fields) else ""
+        value = fields[i].strip() if i is not None and i < len(fields) else ""
+        return "" if value.upper() in EMPTY_MARKERS else value  # Liv-ex writes "NA" for blanks
 
-    seen, kept, retired, invalid = set(), 0, 0, 0
+    def app_type(fields):
+        kind, sub = get(fields, "TYPE"), get(fields, "SUB_TYPE")
+        if kind.lower() == "wine":
+            return sub or "Still"
+        if kind.lower() == "fortified wine":
+            return f"Fortified ({sub})" if sub else "Fortified"
+        return sub or kind
+
+    seen, kept, retired, invalid, non_wine, packs = set(), 0, 0, 0, 0, 0
     with open(dst, "w", newline="", encoding="utf-8") as out:
         w = csv.writer(out, lineterminator="\n")
         w.writerow(OUT_COLUMNS)
         for fields in rows:
             if get(fields, "STATUS").lower() in RETIRED:
                 retired += 1
+                continue
+            if not include_spirits and get(fields, "TYPE").lower() in NON_WINE_TYPES:
+                non_wine += 1
+                continue
+            if any(m in get(fields, "DISPLAY_NAME").lower() for m in PACK_MARKERS):
+                packs += 1
                 continue
             lwin7 = clean_number(get(fields, "LWIN"))[:7]
             if len(lwin7) != 7 or not lwin7.isdigit():
@@ -123,11 +148,13 @@ def main():
             if lwin7 in seen:
                 continue
             seen.add(lwin7)
-            w.writerow([lwin7] + [clean_number(get(fields, k)) if "VINTAGE" in k else get(fields, k)
+            w.writerow([lwin7] + [clean_number(get(fields, k)) if "VINTAGE" in k
+                                  else app_type(fields) if k == "TYPE" else get(fields, k)
                                   for k in OUT_COLUMNS[1:]])
             kept += 1
     size = os.path.getsize(dst) / 1e6
-    print(f"Wrote {kept:,} wines to {dst} ({size:.1f} MB); skipped {retired:,} retired, {invalid:,} invalid rows.")
+    print(f"Wrote {kept:,} wines to {dst} ({size:.1f} MB); skipped {retired:,} retired, "
+          f"{non_wine:,} spirits/cider, {packs:,} cases/placeholders, {invalid:,} invalid rows.")
 
 
 if __name__ == "__main__":

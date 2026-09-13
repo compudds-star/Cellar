@@ -107,7 +107,9 @@ final class LWINCSVFormatTests: XCTestCase {
     }
 
     func testConcurrentLoadIngestsOnce() throws {
-        let url = try XCTUnwrap(Bundle.main.url(forResource: "lwin_sample", withExtension: "csv"))
+        // loadIfNeeded prefers the full LWIN.csv when it's bundled, else the sample.
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "LWIN", withExtension: "csv")
+            ?? Bundle.main.url(forResource: "lwin_sample", withExtension: "csv"))
         let expected = LWINCSV.parse(data: try Data(contentsOf: url)).count
         let db = LWINDatabase()
         DispatchQueue.concurrentPerform(iterations: 8) { _ in db.loadIfNeeded() }
@@ -117,5 +119,55 @@ final class LWINCSVFormatTests: XCTestCase {
 
     func testMatchingBeforeLoadReturnsNothing() {
         XCTAssertEqual(LWINMatcher(database: LWINDatabase()).match(producer: "Opus One", name: ""), [])
+    }
+}
+
+final class LWINRankingTests: XCTestCase {
+
+    private func rec(_ lwin7: String, _ display: String, title: String = "", producer: String,
+                     wine: String = "", country: String = "France", region: String = "Bordeaux") -> LWINRecord {
+        LWINRecord(lwin7: lwin7, displayName: display, producerName: producer, wine: wine,
+                   country: country, region: region, colour: "Red", type: "Still",
+                   firstVintage: nil, finalVintage: nil, producerTitle: title)
+    }
+
+    func testFlagshipBeatsSecondWineAndClassificationWords() {
+        let db = LWINDatabase(records: [
+            rec("1522619", "Margaux du Chateau Margaux, Margaux", title: "Chateau", producer: "Margaux",
+                wine: "Margaux du Chateau Margaux"),
+            rec("1015245", "Chateau Siran, Margaux", title: "Chateau", producer: "Siran"),
+            rec("1012781", "Chateau Margaux Premier Cru Classe, Margaux", title: "Chateau", producer: "Margaux"),
+        ])
+        let matches = LWINMatcher(database: db).bestMatches(producer: "Chateau Margaux", name: "", region: "Bordeaux")
+        XCTAssertEqual(matches.first?.record.lwin7, "1012781")
+    }
+
+    func testBylineInNameStillFindsTheWine() {
+        let db = LWINDatabase(records: [
+            rec("1122662", "Opus One, Napa Valley", producer: "Opus One", country: "United States", region: "California"),
+            rec("1260805", "Opus One, Overture MV, Napa Valley", producer: "Opus One", wine: "Overture MV",
+                country: "United States", region: "California"),
+            rec("1305760", "Baron Philippe de Rothschild, Huertas, Colchagua Valley",
+                producer: "Baron Philippe de Rothschild", wine: "Huertas", country: "Chile", region: "Colchagua"),
+        ])
+        let matches = LWINMatcher(database: db).bestMatches(
+            producer: "OPUS ONE", name: "Robert Mondavi & Baron Philippe de Rothschild",
+            region: "Napa Valley", vintage: 2018)
+        XCTAssertEqual(matches.first?.record.lwin7, "1122662")
+        XCTAssertEqual(LWINMatcher.confidentPick(matches)?.record.lwin7, "1122662")
+    }
+
+    func testCloseRunnerUpBlocksAutoPick() {
+        let a = rec("1000001", "A", producer: "A"), b = rec("1000002", "B", producer: "B")
+        XCTAssertNil(LWINMatcher.confidentPick([LWINMatch(record: a, score: 1, rank: 1.10),
+                                                LWINMatch(record: b, score: 1, rank: 1.08)]))
+        XCTAssertNil(LWINMatcher.confidentPick([LWINMatch(record: a, score: 0.7, rank: 0.7)]))
+        XCTAssertEqual(LWINMatcher.confidentPick([LWINMatch(record: a, score: 0.9, rank: 0.9)])?.record, a)
+    }
+
+    func testNAFieldsReadAsBlank() {
+        let records = LWINCSV.parse("LWIN,DISPLAY_NAME,PRODUCER_TITLE,PRODUCER_NAME,WINE\n1000001,Schieferkopf,NA,Schieferkopf,NA\n")
+        XCTAssertEqual(records.first?.producerTitle, "")
+        XCTAssertEqual(records.first?.wine, "")
     }
 }

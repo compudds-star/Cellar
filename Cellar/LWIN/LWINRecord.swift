@@ -17,6 +17,8 @@ struct LWINRecord: Identifiable, Equatable, Hashable {
     let type: String         // Still / Sparkling / Fortified / …
     let firstVintage: Int?
     let finalVintage: Int?
+    /// "Chateau", "Domaine", … — part of the identity, separate from `producerName`.
+    var producerTitle: String = ""
 
     var id: String { lwin7 }
 

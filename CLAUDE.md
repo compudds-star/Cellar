@@ -99,11 +99,14 @@ proxy/                      Node 18+ pricing proxy for the user's Oracle host
   authoritative** — replace with the free Liv-ex LWIN database:
   `python3 scripts/import_lwin.py <download.xlsx|csv>` writes
   `Cellar/Resources/LWIN.csv` (then `xcodegen generate`; the loader prefers it).
-  CC BY 4.0 — keep the Liv-ex credit in `LWINMatchView`.
+  CC BY 4.0 — keep the Liv-ex credit in `LWINMatchView`. The repo bundles a
+  converted copy (~185k wines; spirits/cider and mixed cases skipped, see
+  `--include-spirits`). Matching indexes producer title + producer + wine; the
+  Add form auto-snaps only via `LWINMatcher.confidentPick`.
 
 ## Known unverified / gotchas
-- The full LWIN file (~200k rows) loads in ~2 s at ~180 MB peak (measured on a
-  Mac with synthetic data). It loads in the background at launch; matching
+- The bundled LWIN.csv (~185k wines, 22 MB) loads in ~1.3 s at ~160 MB peak on a
+  Mac (expect slower on a phone). It loads in the background at launch; matching
   returns nothing until it finishes.
 - Scanned-photo capture works on a **real device**, not the simulator camera —
   use the photo-picker fallback in the simulator.

@@ -215,12 +215,13 @@ struct AddWineFlow: View {
         if !parsed.country.isEmpty { country = parsed.country }
         if let v = parsed.vintage { vintageText = String(v) }
         type = parsed.type
-        // Snap to a confident LWIN match: canonical identity plus backfilled fields.
+        // Snap to an LWIN match only when it's confident AND clearly ahead of the
+        // runner-up; otherwise leave it to "Find LWIN match" so the user picks.
         if lwin7 == nil,
-           let best = LWINMatcher().match(producer: producer, name: name, region: region,
-                                          vintage: vintageInt, limit: 1).first,
-           best.score >= 0.8 {
-            applyLWIN(best.record)
+           let pick = LWINMatcher.confidentPick(
+               LWINMatcher().bestMatches(producer: producer, name: name, region: region,
+                                         vintage: vintageInt, limit: 2)) {
+            applyLWIN(pick.record)
         }
     }
 
@@ -236,6 +237,7 @@ struct AddWineFlow: View {
         let colour = record.colour.lowercased()
         let recType = record.type.lowercased()
         if recType.contains("sparkling") { type = .sparkling }
+        else if recType.contains("fortified") { type = .fortified }
         else if colour.contains("ros") { type = .rose }
         else if colour.contains("white") { type = .white }
         else if colour.contains("red") { type = .red }

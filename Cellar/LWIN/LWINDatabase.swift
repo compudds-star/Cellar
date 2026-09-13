@@ -6,7 +6,9 @@ import Foundation
 enum LWINText {
     static let stopwords: Set<String> = [
         "the", "de", "du", "des", "di", "da", "del", "el", "la", "le", "les",
-        "of", "and", "et", "vin", "wine"
+        "of", "and", "et", "vin", "wine",
+        // Liv-ex keeps "Port" out of the wine name ("Dow's" / "Vintage"), but labels print it.
+        "port", "porto"
     ]
 
     static func normalize(_ s: String) -> String {
@@ -86,7 +88,11 @@ final class LWINDatabase {
             let index = Int32(records.count)
             records.append(rec)
             var ids: [Int32] = []
-            for token in LWINText.tokens([rec.producerName, rec.wine, rec.displayName].joined(separator: " ")) {
+            // Identity words only: DISPLAY_NAME also carries classification and
+            // appellation ("Premier Cru Classe, Margaux") that would dilute matches.
+            let identity = [rec.producerTitle, rec.producerName, rec.wine].joined(separator: " ")
+            let source = identity.trimmingCharacters(in: .whitespaces).isEmpty ? rec.displayName : identity
+            for token in LWINText.tokens(source) {
                 let id: Int32
                 if let existing = idForToken[token] {
                     id = existing
@@ -141,7 +147,7 @@ enum LWINCSV {
     /// one big String or [[String]] in memory.
     static func parse(data: Data) -> [LWINRecord] {
         var header: [String]?
-        var cLwin: Int?, cStatus: Int?, cDisplay: Int?, cProducer: Int?, cWine: Int?
+        var cLwin: Int?, cStatus: Int?, cDisplay: Int?, cTitle: Int?, cProducer: Int?, cWine: Int?
         var cCountry: Int?, cRegion: Int?, cColour: Int?, cType: Int?, cFirst: Int?, cFinal: Int?
         var out: [LWINRecord] = []
         var seen = Set<String>()
@@ -157,6 +163,7 @@ enum LWINCSV {
                 cLwin = col(["LWIN", "LWIN7", "LWIN_7"])
                 cStatus = col(["STATUS"])
                 cDisplay = col(["DISPLAY_NAME", "DISPLAYNAME"])
+                cTitle = col(["PRODUCER_TITLE"])
                 cProducer = col(["PRODUCER_NAME", "PRODUCER"])
                 cWine = col(["WINE"])
                 cCountry = col(["COUNTRY"])
@@ -170,7 +177,8 @@ enum LWINCSV {
             guard let cLwin else { return }
             func f(_ i: Int?) -> String {
                 guard let i, i < fields.count else { return "" }
-                return fields[i].trimmingCharacters(in: .whitespaces)
+                let value = fields[i].trimmingCharacters(in: .whitespaces)
+                return value == "NA" ? "" : value   // Liv-ex writes "NA" for blanks
             }
             if retiredStatuses.contains(f(cStatus).lowercased()) { return }
             // A row's LWIN may be 7/11/16/18 digits; the first 7 are the wine.
@@ -187,7 +195,8 @@ enum LWINCSV {
                 colour: f(cColour),
                 type: f(cType),
                 firstVintage: Int(f(cFirst)),
-                finalVintage: Int(f(cFinal))))
+                finalVintage: Int(f(cFinal)),
+                producerTitle: f(cTitle)))
         }
         return out
     }

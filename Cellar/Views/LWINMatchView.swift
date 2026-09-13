@@ -75,7 +75,7 @@ struct LWINMatchView: View {
             }
         }
         matches = LWINMatcher(database: db)
-            .match(producer: producer, name: name, region: region, vintage: vintage)
+            .bestMatches(producer: producer, name: name, region: region, vintage: vintage)
         usingSample = db.usingSampleData
         loading = false
     }
