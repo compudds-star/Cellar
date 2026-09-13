@@ -13,9 +13,13 @@ struct ScanSheet: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var busy = false
 
-    private var scannerAvailable: Bool {
+    /// Live camera scanning needs a supported device with camera access (not the simulator).
+    @MainActor
+    static var liveScanningAvailable: Bool {
         DataScannerViewController.isSupported && DataScannerViewController.isAvailable
     }
+
+    private var scannerAvailable: Bool { Self.liveScanningAvailable }
 
     var body: some View {
         NavigationStack {

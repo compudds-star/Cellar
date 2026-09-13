@@ -77,41 +77,98 @@ enum WineType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Standard bottle formats with their volume in millilitres. The mL is used to
-/// pro-rate value against a 750 mL reference price (a magnum is ~2x a 750).
+/// Bottle formats with their volume in millilitres. The mL is used to pro-rate
+/// value against a 750 mL reference price (a magnum is ~2x a 750). Stored by raw
+/// value, so the original case names must not change.
 enum BottleSize: String, Codable, CaseIterable, Identifiable {
-    case split          // 187 mL
-    case half           // 375 mL
-    case standard       // 750 mL
-    case magnum         // 1.5 L
-    case doubleMagnum   // 3 L
-    case jeroboam       // 3 L (sparkling) / 4.5 L (still) — we use 3 L
-    case imperial       // 6 L
+    case miniature        // 50 mL
+    case split            // 187.5 mL
+    case twoHundred       // 200 mL
+    case half             // 375 mL
+    case halfLiter        // 500 mL
+    case seventy          // 700 mL (common for spirits)
+    case standard         // 750 mL
+    case liter            // 1 L
+    case handle           // 1.75 L
+    case magnum           // 1.5 L
+    case doubleMagnum     // 3 L
+    case jeroboam         // 3 L (sparkling) / 4.5 L (still) — we use 3 L
+    case rehoboam         // 4.5 L
+    case imperial         // 6 L
+    case salmanazar       // 9 L
+    case balthazar        // 12 L
+    case nebuchadnezzar   // 15 L
 
     var id: String { rawValue }
     var milliliters: Double {
         switch self {
+        case .miniature: return 50
         case .split: return 187.5
+        case .twoHundred: return 200
         case .half: return 375
+        case .halfLiter: return 500
+        case .seventy: return 700
         case .standard: return 750
+        case .liter: return 1000
+        case .handle: return 1750
         case .magnum: return 1500
         case .doubleMagnum, .jeroboam: return 3000
+        case .rehoboam: return 4500
         case .imperial: return 6000
+        case .salmanazar: return 9000
+        case .balthazar: return 12000
+        case .nebuchadnezzar: return 15000
         }
     }
     var label: String {
         switch self {
+        case .miniature: return "Miniature (50 mL)"
         case .split: return "Split (187 mL)"
+        case .twoHundred: return "200 mL"
         case .half: return "Half (375 mL)"
+        case .halfLiter: return "Half liter (500 mL)"
+        case .seventy: return "700 mL"
         case .standard: return "Standard (750 mL)"
+        case .liter: return "Liter (1 L)"
+        case .handle: return "Handle (1.75 L)"
         case .magnum: return "Magnum (1.5 L)"
         case .doubleMagnum: return "Double Magnum (3 L)"
         case .jeroboam: return "Jeroboam (3 L)"
+        case .rehoboam: return "Rehoboam (4.5 L)"
         case .imperial: return "Imperial (6 L)"
+        case .salmanazar: return "Salmanazar (9 L)"
+        case .balthazar: return "Balthazar (12 L)"
+        case .nebuchadnezzar: return "Nebuchadnezzar (15 L)"
         }
     }
     /// Multiplier vs. a standard 750 mL price.
     var priceFactor: Double { milliliters / 750.0 }
+
+    /// Picker sections; Standard lists the defaults (750 mL, 1 L) first.
+    enum Group: String, CaseIterable, Identifiable {
+        case standard, small, large
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .standard: return "Standard"
+            case .small: return "Small"
+            case .large: return "Large format"
+            }
+        }
+        var sizes: [BottleSize] {
+            switch self {
+            case .standard: return [.standard, .liter, .seventy, .handle]
+            case .small: return [.miniature, .split, .twoHundred, .half, .halfLiter]
+            case .large: return [.magnum, .doubleMagnum, .jeroboam, .rehoboam, .imperial,
+                                 .salmanazar, .balthazar, .nebuchadnezzar]
+            }
+        }
+    }
+
+    /// New bottles start at 750 mL for wine and 1 L for spirits.
+    static func defaultSize(for type: WineType) -> BottleSize {
+        type.isSpirit ? .liter : .standard
+    }
 }
 
 enum BottleStatus: String, Codable, CaseIterable, Identifiable {

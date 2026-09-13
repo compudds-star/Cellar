@@ -79,7 +79,8 @@ Cellar/                      app source (Swift)
                             CellarDashboardView (Swift Charts + export menu),
                             SettingsView (endpoint+key), LWINMatchView, ScanSheet,
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
-                            BottleEditorView (add/edit bottles: price paid, date, storage, drink window)
+                            BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
+                            PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry)
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv

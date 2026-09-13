@@ -102,6 +102,42 @@ final class CellarSmokeUITests: XCTestCase {
         }
     }
 
+    /// Crop and rotate a label photo in the Add form. The system photo picker can't be
+    /// driven from a test, so a debug-only launch flag seeds a 900×1200 label photo.
+    func testEditAndCropLabelPhoto() {
+        app.terminate()
+        app.launchArguments = ["-UITestSeedLabelPhoto"]
+        app.launch()
+        dismissSystemAlerts()
+
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        let photo = app.images["labelPhoto"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 5), "seeded photo missing")
+        XCTAssertEqual(photo.value as? String, "900×1200")
+
+        app.buttons["Edit photo"].tap()
+        XCTAssertTrue(app.navigationBars["Edit photo"].waitForExistence(timeout: 5), "photo editor didn't open")
+        let corner = app.descendants(matching: .any)["cropHandle.topLeading"]
+        XCTAssertTrue(corner.waitForExistence(timeout: 5))
+        let start = corner.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 80, dy: 120)))
+        snapshot("10-crop")
+        app.buttons["Rotate left"].tap()
+        snapshot("11-rotated")
+        app.navigationBars["Edit photo"].buttons["Done"].tap()
+
+        XCTAssertTrue(photo.waitForExistence(timeout: 5))
+        let edited = photo.value as? String ?? ""
+        let dims = edited.split(separator: "×").compactMap { Int($0) }
+        XCTAssertEqual(dims.count, 2, "unexpected size: \(edited)")
+        if dims.count == 2 {
+            XCTAssertGreaterThan(dims[0], dims[1], "rotated photo should be landscape: \(edited)")
+            XCTAssertLessThan(dims[0], 1200, "crop should shrink the photo: \(edited)")
+        }
+        snapshot("12-edited-photo")
+    }
+
     /// Online pricing through a plain-http dev proxy on this Mac. Skipped unless
     /// the proxy is running: `cd proxy && PROVIDER=mock npm start`.
     func testPricingViaLocalProxy() throws {

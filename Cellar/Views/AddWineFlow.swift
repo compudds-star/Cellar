@@ -38,6 +38,8 @@ struct AddWineFlow: View {
     @State private var showingScanner = false
     @State private var showingLWIN = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var editingPhoto = false
+    @State private var didAutoStartScanner = false
 
     // Canonical LWIN identity, once matched.
     @State private var lwin7: String?
@@ -76,6 +78,25 @@ struct AddWineFlow: View {
                     }
                     if let labelImage, let ui = UIImage(data: labelImage) {
                         Image(uiImage: ui).resizable().scaledToFit().frame(maxHeight: 160)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityLabel("Label photo")
+                            .accessibilityIdentifier("labelPhoto")
+                            .accessibilityValue("\(Int(ui.size.width))×\(Int(ui.size.height))" as String)
+                        HStack {
+                            Button {
+                                editingPhoto = true
+                            } label: {
+                                Label("Edit photo", systemImage: "crop")
+                            }
+                            Spacer()
+                            Button(role: .destructive) {
+                                self.labelImage = nil
+                                photoItem = nil
+                            } label: {
+                                Label("Remove photo", systemImage: "trash")
+                            }
+                        }
+                        .buttonStyle(.borderless)
                     }
                 }
 
@@ -146,9 +167,7 @@ struct AddWineFlow: View {
                 if destination == .cellar {
                 Section("Add to cellar") {
                     Stepper("Quantity: \(quantity)", value: $quantity, in: 1...240)
-                    Picker("Size", selection: $size) {
-                        ForEach(BottleSize.allCases) { Text($0.label).tag($0) }
-                    }
+                    BottleSizePicker(selection: $size)
                     HStack {
                         Text("Price paid (per bottle)")
                         Spacer()
@@ -171,6 +190,21 @@ struct AddWineFlow: View {
                     TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...5)
                 }
             }
+            // Follow the type's default size (750 mL wine, 1 L spirits) until the user picks one.
+            .onChange(of: type) { oldType, newType in
+                if size == BottleSize.defaultSize(for: oldType) {
+                    size = BottleSize.defaultSize(for: newType)
+                }
+            }
+            .task {
+                // Start with the camera: a new bottle usually begins with its label.
+                // Cancelling the scan leaves the empty form for typing details instead.
+                guard !didAutoStartScanner, labelImage == nil, ScanSheet.liveScanningAvailable else { return }
+                didAutoStartScanner = true
+                // Let this sheet finish presenting before stacking the scanner on top.
+                try? await Task.sleep(for: .milliseconds(350))
+                showingScanner = true
+            }
             .navigationTitle("Add wine")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -189,6 +223,21 @@ struct AddWineFlow: View {
                     }
                 }
             }
+            .fullScreenCover(isPresented: $editingPhoto) {
+                if let data = labelImage, let ui = UIImage(data: data) {
+                    PhotoEditorView(image: ui) { edited in
+                        labelImage = ImageResizer.jpeg(from: edited, maxDimension: 1200, quality: 0.85)
+                    }
+                }
+            }
+            #if DEBUG
+            .onAppear {
+                // UI tests can't drive the system photo picker; seed a label photo instead.
+                if labelImage == nil, ProcessInfo.processInfo.arguments.contains("-UITestSeedLabelPhoto") {
+                    labelImage = UITestFixtures.labelPhotoJPEG()
+                }
+            }
+            #endif
             .sheet(isPresented: $showingLWIN) {
                 LWINMatchView(producer: producer, name: name, region: region,
                               vintage: vintageInt) { record in
@@ -286,6 +335,10 @@ struct AddWineFlow: View {
 enum ImageResizer {
     static func jpeg(from data: Data, maxDimension: CGFloat, quality: CGFloat = 0.7) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
+        return jpeg(from: image, maxDimension: maxDimension, quality: quality)
+    }
+
+    static func jpeg(from image: UIImage, maxDimension: CGFloat, quality: CGFloat = 0.7) -> Data? {
         let size = image.size
         let scale = min(1, maxDimension / max(size.width, size.height))
         let target = CGSize(width: size.width * scale, height: size.height * scale)

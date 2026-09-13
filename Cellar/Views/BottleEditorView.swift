@@ -65,7 +65,9 @@ struct BottleEditorView: View {
     init(wine: Wine, bottle: Bottle? = nil) {
         self.wine = wine
         self.bottle = bottle
-        _draft = State(initialValue: bottle.map(BottleDraft.init(bottle:)) ?? BottleDraft())
+        var newBottles = BottleDraft()
+        newBottles.size = BottleSize.defaultSize(for: wine.type)
+        _draft = State(initialValue: bottle.map(BottleDraft.init(bottle:)) ?? newBottles)
     }
 
     var body: some View {
@@ -75,9 +77,7 @@ struct BottleEditorView: View {
                     if bottle == nil {
                         Stepper("Quantity: \(draft.quantity)", value: $draft.quantity, in: 1...240)
                     }
-                    Picker("Size", selection: $draft.size) {
-                        ForEach(BottleSize.allCases) { Text($0.label).tag($0) }
-                    }
+                    BottleSizePicker(selection: $draft.size)
                 }
 
                 Section("Purchase") {
@@ -138,5 +138,20 @@ struct BottleEditorView: View {
         }
         Task { DrinkWindowNotifier.schedule(for: wine) }
         dismiss()
+    }
+}
+
+/// Size picker grouped into Standard / Small / Large format.
+struct BottleSizePicker: View {
+    @Binding var selection: BottleSize
+
+    var body: some View {
+        Picker("Size", selection: $selection) {
+            ForEach(BottleSize.Group.allCases) { group in
+                Section(group.title) {
+                    ForEach(group.sizes) { Text($0.label).tag($0) }
+                }
+            }
+        }
     }
 }

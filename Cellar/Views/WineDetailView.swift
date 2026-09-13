@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct WineDetailView: View {
     @Bindable var wine: Wine
@@ -10,6 +11,9 @@ struct WineDetailView: View {
     @State private var errorMessage: String?
     @State private var addingBottles = false
     @State private var editingBottle: Bottle?
+    @State private var pickingPhoto = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var editingPhoto = false
 
     var body: some View {
         List {
@@ -18,6 +22,7 @@ struct WineDetailView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 240)
                     .clipped()
+                    .overlay(alignment: .topTrailing) { photoMenu.padding(10) }
             }
             .listRowInsets(EdgeInsets())
 
@@ -111,7 +116,7 @@ struct WineDetailView: View {
                 Section {
                     Button {
                         wine.isWishlist = false
-                        let bottle = Bottle(size: .standard)
+                        let bottle = Bottle(size: .defaultSize(for: wine.type))
                         context.insert(bottle)
                         wine.bottles.append(bottle)
                         PriceLookup.start(for: wine, context: context)
@@ -167,6 +172,23 @@ struct WineDetailView: View {
         // Scrolling puts the keyboard away, so a focused tasting note doesn't pin the
         // page (focus returns to it when the bottle editor closes).
         .scrollDismissesKeyboard(.immediately)
+        .photosPicker(isPresented: $pickingPhoto, selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    wine.labelImage = ImageResizer.jpeg(from: data, maxDimension: 1200)
+                }
+                pickedPhoto = nil
+            }
+        }
+        .fullScreenCover(isPresented: $editingPhoto) {
+            if let data = wine.labelImage, let ui = UIImage(data: data) {
+                PhotoEditorView(image: ui) { edited in
+                    wine.labelImage = ImageResizer.jpeg(from: edited, maxDimension: 1200, quality: 0.85)
+                }
+            }
+        }
         .sheet(isPresented: $addingBottles) {
             BottleEditorView(wine: wine)
         }
@@ -196,6 +218,35 @@ struct WineDetailView: View {
         }
     }
 
+    /// Add, replace, crop/rotate, or remove the wine's label photo.
+    private var photoMenu: some View {
+        Menu {
+            Button {
+                pickingPhoto = true
+            } label: {
+                Label(wine.labelImage == nil ? "Add photo" : "Replace photo", systemImage: "photo")
+            }
+            if wine.labelImage != nil {
+                Button {
+                    editingPhoto = true
+                } label: {
+                    Label("Edit photo", systemImage: "crop")
+                }
+                Button(role: .destructive) {
+                    wine.labelImage = nil
+                } label: {
+                    Label("Remove photo", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "camera.circle.fill")
+                .font(.system(size: 30))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .black.opacity(0.45))
+        }
+        .accessibilityLabel("Photo options")
+    }
+
     /// Puts the keyboard away before opening the bottle editor. Otherwise focus
     /// returns to a tasting note when the sheet closes and the keyboard pops back up.
     private func endEditing() {
@@ -211,6 +262,9 @@ struct WineDetailView: View {
     private var headerImage: some View {
         if let data = wine.labelImage, let ui = UIImage(data: data) {
             Image(uiImage: ui).resizable().scaledToFill()
+                .accessibilityLabel("Label photo")
+                .accessibilityIdentifier("wineHeaderPhoto")
+                .accessibilityValue("\(Int(ui.size.width))×\(Int(ui.size.height))" as String)
         } else if let s = wine.imageURL, let url = URL(string: s) {
             AsyncImage(url: url) { phase in
                 if let image = phase.image { image.resizable().scaledToFill() }

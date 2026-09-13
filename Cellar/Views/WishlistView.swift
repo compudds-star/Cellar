@@ -44,7 +44,7 @@ struct WishlistView: View {
     /// Promote a wishlist wine into the cellar: clear the flag and add one bottle.
     private func moveToCellar(_ wine: Wine) {
         wine.isWishlist = false
-        let bottle = Bottle(size: .standard)
+        let bottle = Bottle(size: .defaultSize(for: wine.type))
         context.insert(bottle)
         wine.bottles.append(bottle)
         PriceLookup.start(for: wine, context: context)
