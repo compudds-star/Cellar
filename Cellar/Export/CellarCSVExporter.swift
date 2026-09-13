@@ -22,10 +22,10 @@ enum CellarCSVExporter {
             // A wine with no bottles still exports one informational row.
             let rows: [Bottle?] = bottles.isEmpty ? [nil] : bottles.map { Optional($0) }
             for bottle in rows {
-                lines.append([
+                let fields: [String] = [
                     esc(wine.producer),
                     esc(wine.name),
-                    wine.vintage.map(String.init) ?? "NV",
+                    wine.vintage.map { String($0) } ?? "NV",
                     esc(wine.varietal),
                     esc(wine.region),
                     esc(wine.country),
@@ -36,13 +36,14 @@ enum CellarCSVExporter {
                     esc(bottle?.storageLocation ?? ""),
                     bottle?.purchasePrice.map { "\($0)" } ?? "",
                     bottle?.purchaseDate.map { df.string(from: $0) } ?? "",
-                    bottle?.drinkFrom.map(String.init) ?? "",
-                    bottle?.drinkTo.map(String.init) ?? "",
-                    wine.rating.map(String.init) ?? "",
-                    wine.communityScore.map(String.init) ?? "",
+                    bottle?.drinkFrom.map { "\($0)" } ?? "",
+                    bottle?.drinkTo.map { "\($0)" } ?? "",
+                    wine.rating.map { "\($0)" } ?? "",
+                    wine.communityScore.map { "\($0)" } ?? "",
                     wine.hasValuation ? "\(wine.estimatedUnitValue)" : "",
                     wine.bestOfferPrice.map { "\($0)" } ?? ""
-                ].joined(separator: ","))
+                ]
+                lines.append(fields.joined(separator: ","))
             }
         }
         return lines.joined(separator: "\n")
