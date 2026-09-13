@@ -129,8 +129,12 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
   request params and response field names against your Wine-Searcher API docs**
   and adjust the mapping marked `ADJUST` in `server.js` — their exact schema
   isn't public, so the adapter maps common field names best-effort.
-- `PROVIDER=apify` — set `APIFY_TOKEN` (pay-per-result, ~2.5¢/wine). Adjust the
-  actor input/output mapping to the actor you choose.
+- `PROVIDER=apify` — set `APIFY_TOKEN`. Uses the `abotapi~wine-searcher-scraper`
+  actor (from ~$1.50 per 1,000 wines found; runs on Apify's free plan). The proxy
+  sends a Wine-Searcher URL with the market (e.g. `/usa`) for local merchants,
+  keeps 750 mL bottles and per-bottle case prices, and converts the returned EUR
+  prices with ECB rates (frankfurter.app). Cold lookups take ~5–35 s; repeats
+  are cached for 7 days.
 
 ## Security notes
 

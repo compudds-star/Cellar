@@ -179,27 +179,28 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
 }
 
 // ---- Apify adapter (abotapi~wine-searcher-scraper, pay-per-result) ----------
-// Input/output field names follow the actor's published input schema and
-// example output. The actor needs Apify residential proxies (a paid Apify plan);
-// the proxy country sets the price currency. The token goes in a header, never
-// the URL.
-const APIFY_COUNTRY = { USD: "US", GBP: "GB", EUR: "FR", CAD: "CA", AUD: "AU" };
+// Field names verified against live runs (2026-09-13). The actor scrapes a
+// Wine-Searcher /find page: the location segment in the URL picks that market's
+// merchants, but prices come back in the proxy exit country's currency (EUR in
+// practice), so they're converted to the requested currency with ECB rates.
+// Works on Apify's free plan. The token goes in a header, never the URL.
+const APIFY_MARKET = { USD: "usa", GBP: "uk", CAD: "canada", AUD: "australia" };
 
 async function lookupApify({ q, lwin, vintage, currency }) {
   if (!APIFY_TOKEN) throw new Error("apify not configured");
   const input = {
     fetchOffers: true,
     maxItems: 1,
-    proxy: {
-      useApifyProxy: true,
-      apifyProxyGroups: ["RESIDENTIAL"],
-      apifyProxyCountry: APIFY_COUNTRY[currency] ?? "US",
-    },
+    proxy: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"], apifyProxyCountry: "US" },
   };
   // Prefer the name: the app's bundled LWIN sample codes are illustrative.
   if (q) {
-    input.inputType = "wineNames";
-    input.wineNames = [[q, vintage].filter(Boolean).join(" ")];
+    const slug = q.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, "+");
+    const parts = [slug, /^\d{4}$/.test(vintage) ? vintage : "1"]; // "1" = any vintage (NV)
+    if (APIFY_MARKET[currency]) parts.push(APIFY_MARKET[currency]);
+    input.inputType = "urls";
+    input.urls = [`https://www.wine-searcher.com/find/${parts.join("/")}`];
   } else {
     input.inputType = "lwins";
     input.lwins = [lwin];
@@ -214,27 +215,37 @@ async function lookupApify({ q, lwin, vintage, currency }) {
   if (!r.ok) throw new Error("apify http " + r.status);
   const items = await r.json();
   const first = Array.isArray(items) ? items[0] ?? {} : {};
-  const priceCurrency = first.avgPriceCurrency ?? first.cheapestPriceCurrency ?? currency;
+  const baseCurrency = first.avgPriceCurrency ?? first.cheapestPriceCurrency ?? currency;
 
-  // Keep 750 mL listings only (cases are divided down to a per-bottle price),
-  // so offers compare with the app's per-750 mL valuation.
-  const offers = (Array.isArray(first.offers) ? first.offers : [])
-    .filter((o) => !o.unitDescription || /750\s*ml/i.test(o.unitDescription))
-    .map((o) => {
-      const perUnit = num(o.price);
-      const bottles = Number(o.bottlesPerUnit) > 1 ? Number(o.bottlesPerUnit) : 1;
-      return {
-        merchant: o.merchant ?? "Merchant",
-        price: perUnit === null ? null : Math.round((perUnit / bottles) * 100) / 100,
-        currency: o.priceCurrency ?? priceCurrency,
-        url: o.merchantUrl ?? first.wineSearcherUrl ?? null,
-        address: null,
-        latitude: null,
-        longitude: null,
-        inStock: o.availability ? /instock/i.test(o.availability) : true,
-      };
+  // Per-750 mL comparisons only: bottles as-is, "Case of N Btls" divided by N;
+  // half bottles, magnums and large formats are skipped.
+  const bottlesIn = (o) => {
+    const d = String(o.unitDescription ?? "");
+    if (!d || /750\s*ml/i.test(d)) return 1;
+    const m = /case of (\d+)/i.exec(d);
+    return m ? Number(m[1]) : 0;
+  };
+  const offers = [];
+  for (const o of Array.isArray(first.offers) ? first.offers : []) {
+    const n = bottlesIn(o);
+    const p = num(o.price);
+    if (!n || p === null) continue;
+    const rate = await fxRate(o.priceCurrency ?? baseCurrency, currency);
+    offers.push({
+      merchant: o.merchant ?? "Merchant",
+      price: money((p / n) * rate),
+      currency,
+      url: o.merchantUrl ?? first.wineSearcherUrl ?? null,
+      address: null,
+      latitude: null,
+      longitude: null,
+      inStock: o.availability ? /instock/i.test(o.availability) : true,
     });
-  const prices = offers.map((o) => o.price).filter((n) => typeof n === "number");
+  }
+  const prices = offers.filter((o) => o.inStock).map((o) => o.price);
+
+  const baseRate = await fxRate(baseCurrency, currency);
+  const convert = (v) => (v === null ? null : money(v * baseRate));
 
   // The app shows scores on the 100-point scale.
   let score = num(first.score);
@@ -242,10 +253,11 @@ async function lookupApify({ q, lwin, vintage, currency }) {
   if (score !== null && best && best !== 100) score = Math.round((score / best) * 100);
 
   const out = contract({
-    average: num(first.avgPrice) ?? num(first.medianPriceAmount) ?? (prices.length ? avg(prices) : null),
-    min: num(first.cheapestPriceAmount) ?? (prices.length ? Math.min(...prices) : null),
-    max: num(first.highestPriceAmount) ?? (prices.length ? Math.max(...prices) : null),
-    currency: priceCurrency,
+    average: convert(num(first.avgPrice) ?? num(first.medianPriceAmount)) ?? (prices.length ? avg(prices) : null),
+    min: prices.length ? Math.min(...prices) : convert(num(first.cheapestPriceAmount)),
+    // The actor's highestPriceAmount includes large formats, so only offers count.
+    max: prices.length ? Math.max(...prices) : null,
+    currency,
     score,
     image: first.labelImageUrl ?? null,
     offers,
@@ -254,12 +266,34 @@ async function lookupApify({ q, lwin, vintage, currency }) {
   return out;
 }
 
+// ---- Currency conversion (ECB reference rates via frankfurter.app, no key) ----
+const fxCache = new Map(); // "EUR>USD" -> { rate, at }
+async function fxRate(from, to) {
+  if (!from || !to || from === to) return 1;
+  const key = `${from}>${to}`;
+  const hit = fxCache.get(key);
+  if (hit && Date.now() - hit.at < 12 * 3600 * 1000) return hit.rate;
+  try {
+    const r = await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error("fx http " + r.status);
+    const rate = (await r.json())?.rates?.[to];
+    if (typeof rate !== "number") throw new Error("fx rate missing for " + to);
+    fxCache.set(key, { rate, at: Date.now() });
+    return rate;
+  } catch (err) {
+    if (hit) return hit.rate; // a stale rate beats no price
+    throw err;
+  }
+}
+
 // ---- helpers ----------------------------------------------------------------
 function num(v) {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
+function money(n) { return Math.round(n * 100) / 100; }
 function avg(arr) { return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100; }
 
 app.listen(Number(PORT), HOST, () => {
