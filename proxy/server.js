@@ -217,23 +217,30 @@ async function lookupApify({ q, lwin, vintage, currency }) {
   const first = Array.isArray(items) ? items[0] ?? {} : {};
   const baseCurrency = first.avgPriceCurrency ?? first.cheapestPriceCurrency ?? currency;
 
-  // Per-750 mL comparisons only: bottles as-is, "Case of N Btls" divided by N;
-  // half bottles, magnums and large formats are skipped.
-  const bottlesIn = (o) => {
-    const d = String(o.unitDescription ?? "");
-    if (!d || /750\s*ml/i.test(d)) return 1;
-    const m = /case of (\d+)/i.exec(d);
-    return m ? Number(m[1]) : 0;
+  // Per-750 mL comparisons: 750 mL, 700 mL and 1 L bottles (and cases of them)
+  // are scaled to a 750 mL price; half bottles, magnums, 1.75 L handles and other
+  // formats are skipped because their per-mL prices don't scale linearly.
+  // Labels seen: "Bottle (750ml)", "1ltr", "1.75ltr", "Case of 6x 1ltr", "Case of 12 Btls".
+  const unitOf = (o) => {
+    const d = String(o.unitDescription ?? "").toLowerCase();
+    const caseMatch = /case of (\d+)/.exec(d);
+    const count = Number(caseMatch?.[1] ?? o.bottlesPerUnit ?? 1) || 1;
+    const vol = /(\d+(?:\.\d+)?)\s*(ml|cl|ltr|litre|liter|l)\b/.exec(d);
+    let ml = 750;                                    // no size given: a standard bottle
+    if (vol) ml = Number(vol[1]) * ({ ml: 1, cl: 10 }[vol[2]] ?? 1000);
+    else if (d && !caseMatch) return null;           // unrecognized single format
+    if (![700, 750, 1000].some((v) => Math.abs(ml - v) < 5)) return null;
+    return { count, ml };
   };
   const offers = [];
   for (const o of Array.isArray(first.offers) ? first.offers : []) {
-    const n = bottlesIn(o);
+    const unit = unitOf(o);
     const p = num(o.price);
-    if (!n || p === null) continue;
+    if (!unit || p === null) continue;
     const rate = await fxRate(o.priceCurrency ?? baseCurrency, currency);
     offers.push({
       merchant: o.merchant ?? "Merchant",
-      price: money((p / n) * rate),
+      price: money((p / unit.count) * (750 / unit.ml) * rate),
       currency,
       url: o.merchantUrl ?? first.wineSearcherUrl ?? null,
       address: null,
