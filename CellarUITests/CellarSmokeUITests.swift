@@ -157,12 +157,65 @@ final class CellarSmokeUITests: XCTestCase {
     }
 
     private func chooseCollection(_ name: String) {
-        let picker = app.collectionViews.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Collection'")).firstMatch
+        choose(name, in: "Collection")
+    }
+
+    /// Picks `option` from the form's menu picker whose label starts with `pickerLabel`.
+    private func choose(_ option: String, in pickerLabel: String) {
+        let picker = app.collectionViews.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", pickerLabel)).firstMatch
         reveal(picker)
         picker.tap()
-        let option = app.buttons[name].firstMatch
-        XCTAssertTrue(option.waitForExistence(timeout: 5), "collection option \(name) missing")
-        option.tap()
+        let item = app.buttons[option].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "\(pickerLabel) option \(option) missing")
+        item.tap()
+    }
+
+    /// Replaces a text field's contents: focus it, Select All from the edit menu, type over it.
+    private func replaceText(in field: XCUIElement, with text: String) {
+        reveal(field)
+        field.tap()
+        let current = field.value as? String ?? ""
+        if !current.isEmpty, current != field.placeholderValue {
+            field.press(forDuration: 1.0)
+            let selectAll = app.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == 'Select All'")).firstMatch
+            XCTAssertTrue(selectAll.waitForExistence(timeout: 3), "Select All menu didn't appear")
+            selectAll.tap()
+            field.typeText(XCUIKeyboardKey.delete.rawValue)
+        }
+        field.typeText(text)
+    }
+
+    /// Edit a saved wine: rename it, change vintage and type, and see the page update.
+    func testEditSavedWine() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let producer = "Edit \(stamp)", edited = "Edited \(stamp)"
+
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        type(producer, into: app.textFields["Producer"])
+        type("2015", into: app.textFields["Vintage (blank = NV)"])
+        app.navigationBars["Add wine"].buttons["Save"].tap()
+        let row = cell(containing: producer)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+
+        let detailBar = app.navigationBars["2015 \(producer)"]
+        XCTAssertTrue(detailBar.waitForExistence(timeout: 5))
+        detailBar.buttons["Edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForExistence(timeout: 5), "wine editor didn't open")
+        replaceText(in: app.textFields["Producer"], with: edited)
+        replaceText(in: app.textFields["Vintage (blank = NV)"], with: "2016")
+        choose("White", in: "Type")
+        snapshot("16-edit-wine")
+        app.navigationBars["Edit wine"].buttons["Save"].tap()
+
+        XCTAssertTrue(app.navigationBars["2016 \(edited)"].waitForExistence(timeout: 5), "title didn't update")
+        XCTAssertTrue(app.staticTexts["White"].exists, "type didn't update")
+        snapshot("17-edited-wine")
+        app.navigationBars["2016 \(edited)"].buttons["Cellar"].tap()
+        XCTAssertTrue(cell(containing: edited).waitForExistence(timeout: 5))
+        XCTAssertFalse(cell(containing: "2015 \(producer)").exists, "old name still listed")
     }
 
     /// Crop and rotate a label photo in the Add form. The system photo picker can't be

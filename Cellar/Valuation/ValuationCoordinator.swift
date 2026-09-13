@@ -86,17 +86,18 @@ final class PriceLookup {
     /// quietly when no pricing endpoint is set or the price is still fresh (7-day
     /// cache, so a paid API isn't hit again for every bottle added). Failures are
     /// logged; the manual "Refresh price online" button still reports errors.
-    static func start(for wine: Wine, context: ModelContext) {
-        guard ValuationCoordinator.isConfigured, !ValuationCoordinator.isFresh(wine) else { return }
-        shared.run(wine, context: context)
+    /// `force` skips the freshness check (e.g. the wine was edited into a different one).
+    static func start(for wine: Wine, context: ModelContext, force: Bool = false) {
+        guard ValuationCoordinator.isConfigured, force || !ValuationCoordinator.isFresh(wine) else { return }
+        shared.run(wine, context: context, force: force)
     }
 
-    private func run(_ wine: Wine, context: ModelContext) {
+    private func run(_ wine: Wine, context: ModelContext, force: Bool) {
         guard inFlight.insert(wine.id).inserted else { return }
         Task {
             defer { inFlight.remove(wine.id) }
             do {
-                try await ValuationCoordinator.refresh(wine, context: context)
+                try await ValuationCoordinator.refresh(wine, context: context, force: force)
             } catch {
                 Self.log.info("Automatic price lookup failed: \(error.localizedDescription, privacy: .public)")
             }

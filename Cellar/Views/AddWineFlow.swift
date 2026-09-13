@@ -109,14 +109,7 @@ struct AddWineFlow: View {
                     TextField("Country", text: $country)
                     TextField("Vintage (blank = NV)", text: $vintageText)
                         .keyboardType(.numberPad)
-                    Picker("Type", selection: $type) {
-                        Section("Wine") {
-                            ForEach(WineType.wines) { Text($0.label).tag($0) }
-                        }
-                        Section("Spirits") {
-                            ForEach(WineType.spirits) { Text($0.label).tag($0) }
-                        }
-                    }
+                    WineTypePicker(selection: $type)
                 }
 
                 Section("Wine identity (LWIN)") {
