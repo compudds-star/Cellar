@@ -115,9 +115,9 @@ struct BottleEditorView: View {
                 }
             }
             .onAppear {
-                // New bottles go where the last ones went.
+                // New bottles start in the default collection (Settings).
                 if bottle == nil, draft.collection == nil {
-                    draft.collection = CollectionMemory.lastUsed(in: context)
+                    draft.collection = CollectionMemory.defaultCollection(in: context)
                 }
             }
             .navigationTitle(bottle == nil ? "Add bottles" : "Edit bottle")
@@ -155,9 +155,10 @@ struct BottleEditorView: View {
 /// Size picker grouped into Standard / Small / Large format.
 struct BottleSizePicker: View {
     @Binding var selection: BottleSize
+    var title = "Size"
 
     var body: some View {
-        Picker("Size", selection: $selection) {
+        Picker(title, selection: $selection) {
             ForEach(BottleSize.Group.allCases) { group in
                 Section(group.title) {
                     ForEach(group.sizes) { Text($0.label).tag($0) }

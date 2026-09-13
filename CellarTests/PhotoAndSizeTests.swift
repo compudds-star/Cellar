@@ -4,6 +4,29 @@ import UIKit
 
 final class BottleSizeTests: XCTestCase {
 
+    // Unit and UI tests share the host app's UserDefaults; start from the built-in defaults.
+    override func setUp() {
+        super.setUp()
+        clearSettings()
+    }
+
+    override func tearDown() {
+        clearSettings()
+        super.tearDown()
+    }
+
+    private func clearSettings() {
+        UserDefaults.standard.removeObject(forKey: BottleDefaults.wineKey)
+        UserDefaults.standard.removeObject(forKey: BottleDefaults.spiritKey)
+    }
+
+    func testSettingsChangeTheDefaultSizes() {
+        BottleDefaults.wine = .magnum
+        BottleDefaults.spirit = .seventy
+        XCTAssertEqual(BottleSize.defaultSize(for: .red), .magnum)
+        XCTAssertEqual(BottleSize.defaultSize(for: .gin), .seventy)
+    }
+
     func testSavedSizesStillReadBack() {
         for raw in ["split", "half", "standard", "magnum", "doubleMagnum", "jeroboam", "imperial"] {
             XCTAssertNotNil(BottleSize(rawValue: raw), raw)

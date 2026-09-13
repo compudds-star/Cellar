@@ -84,4 +84,27 @@ final class CollectionTests: XCTestCase {
         CollectionMemory.remember(nil)
         XCTAssertNil(CollectionMemory.lastUsed(in: ctx))
     }
+
+    func testDefaultCollectionSetting() throws {
+        defer {
+            UserDefaults.standard.removeObject(forKey: CollectionMemory.key)
+            UserDefaults.standard.removeObject(forKey: CollectionMemory.defaultKey)
+        }
+        let home = CellarCollection(name: "Home"), beach = CellarCollection(name: "Beach")
+        ctx.insert(home)
+        ctx.insert(beach)
+        try ctx.save()
+        CollectionMemory.remember(beach)
+
+        CollectionMemory.defaultChoice = .lastUsed
+        XCTAssertEqual(CollectionMemory.defaultCollection(in: ctx)?.id, beach.id)
+        CollectionMemory.defaultChoice = .collection(home.id)
+        XCTAssertEqual(CollectionMemory.defaultCollection(in: ctx)?.id, home.id)
+        CollectionMemory.defaultChoice = .noCollection
+        XCTAssertNil(CollectionMemory.defaultCollection(in: ctx))
+
+        XCTAssertEqual(CollectionDefault(storage: CollectionDefault.collection(home.id).storage), .collection(home.id))
+        XCTAssertEqual(CollectionDefault(storage: "none"), .noCollection)
+        XCTAssertEqual(CollectionDefault(storage: "garbage"), .lastUsed)
+    }
 }

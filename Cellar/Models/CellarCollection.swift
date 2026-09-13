@@ -61,9 +61,38 @@ enum CollectionStore {
     }
 }
 
-/// Remembers the collection bottles were last added to, so the next add defaults to it.
+/// Which collection new bottles start in, chosen in Settings.
+enum CollectionDefault: Hashable {
+    case lastUsed
+    case noCollection
+    case collection(UUID)
+
+    init(storage: String?) {
+        switch storage {
+        case nil, "lastUsed": self = .lastUsed
+        case "none": self = .noCollection
+        case let raw?: self = UUID(uuidString: raw).map(CollectionDefault.collection) ?? .lastUsed
+        }
+    }
+
+    var storage: String {
+        switch self {
+        case .lastUsed: return "lastUsed"
+        case .noCollection: return "none"
+        case .collection(let id): return id.uuidString
+        }
+    }
+}
+
+/// Default collection for new bottles: the Settings choice, or the last one used.
 enum CollectionMemory {
     static let key = "cellar.lastCollectionID"
+    static let defaultKey = "defaults.collection"
+
+    static var defaultChoice: CollectionDefault {
+        get { CollectionDefault(storage: UserDefaults.standard.string(forKey: defaultKey)) }
+        set { UserDefaults.standard.set(newValue.storage, forKey: defaultKey) }
+    }
 
     static func remember(_ collection: CellarCollection?) {
         UserDefaults.standard.set(collection?.id.uuidString, forKey: key)
@@ -71,6 +100,19 @@ enum CollectionMemory {
 
     static func lastUsed(in context: ModelContext) -> CellarCollection? {
         guard let raw = UserDefaults.standard.string(forKey: key), let id = UUID(uuidString: raw) else { return nil }
+        return collection(id, in: context)
+    }
+
+    /// The collection new bottles start in. A deleted default collection gives nil.
+    static func defaultCollection(in context: ModelContext) -> CellarCollection? {
+        switch defaultChoice {
+        case .lastUsed: return lastUsed(in: context)
+        case .noCollection: return nil
+        case .collection(let id): return collection(id, in: context)
+        }
+    }
+
+    private static func collection(_ id: UUID, in context: ModelContext) -> CellarCollection? {
         let descriptor = FetchDescriptor<CellarCollection>(predicate: #Predicate { $0.id == id })
         return try? context.fetch(descriptor).first
     }

@@ -79,7 +79,7 @@ Cellar/                      app source (Swift)
 └── Views/                  RootTabView (Cellar/Wishlist/Value tabs), CellarListView,
                             WineDetailView, AddWineFlow, WishlistView, WhereToBuyView,
                             CellarDashboardView (Swift Charts + export menu),
-                            SettingsView (endpoint+key), LWINMatchView, ScanSheet,
+                            SettingsView (new-bottle defaults: collection, wine/spirit sizes; pricing endpoint+key), LWINMatchView, ScanSheet,
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
                             BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
                             PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry),

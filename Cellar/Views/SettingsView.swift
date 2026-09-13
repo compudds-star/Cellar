@@ -1,9 +1,16 @@
 import SwiftUI
+import SwiftData
 
-/// Configure online pricing. The endpoint is stored in UserDefaults; the API
-/// key goes to the Keychain and is never shown back in full.
+/// App settings: defaults for new bottles, and online pricing. The endpoint and
+/// defaults are stored in UserDefaults; the API key goes to the Keychain and is
+/// never shown back in full.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
+
+    @State private var collectionDefault = CollectionMemory.defaultChoice
+    @State private var wineSize = BottleDefaults.wine
+    @State private var spiritSize = BottleDefaults.spirit
 
     @State private var baseURLText = ValuationSettings.baseURL?.absoluteString ?? ""
     @State private var apiKeyText = ""
@@ -13,6 +20,20 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("Collection", selection: $collectionDefault) {
+                        Text("Last used").tag(CollectionDefault.lastUsed)
+                        Text("None").tag(CollectionDefault.noCollection)
+                        ForEach(collections) { Text($0.name).tag(CollectionDefault.collection($0.id)) }
+                    }
+                    BottleSizePicker(selection: $wineSize, title: "Wine bottle size")
+                    BottleSizePicker(selection: $spiritSize, title: "Spirits bottle size")
+                } header: {
+                    Text("Defaults for new bottles")
+                } footer: {
+                    Text("Used when adding wine or bottles; you can still change them each time.")
+                }
+
                 Section("Pricing endpoint") {
                     TextField("https://your-host or http://192.168.1.20:8787", text: $baseURLText)
                         .textInputAutocapitalization(.never)
@@ -47,7 +68,13 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Pricing")
+            .navigationTitle("Settings")
+            .onAppear {
+                // A deleted default collection falls back to "Last used".
+                if case .collection(let id) = collectionDefault, !collections.contains(where: { $0.id == id }) {
+                    collectionDefault = .lastUsed
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -73,6 +100,9 @@ struct SettingsView: View {
         }
         let key = apiKeyText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !key.isEmpty { APIKeyStore.save(key) }
+        CollectionMemory.defaultChoice = collectionDefault
+        BottleDefaults.wine = wineSize
+        BottleDefaults.spirit = spiritSize
         dismiss()
     }
 }

@@ -47,7 +47,7 @@ struct WishlistView: View {
         let bottle = Bottle(size: .defaultSize(for: wine.type))
         context.insert(bottle)
         wine.bottles.append(bottle)
-        bottle.collection = CollectionMemory.lastUsed(in: context)
+        bottle.collection = CollectionMemory.defaultCollection(in: context)
         PriceLookup.start(for: wine, context: context)
     }
 

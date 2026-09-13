@@ -29,7 +29,7 @@ struct AddWineFlow: View {
     @State private var rating = 0            // 0 = unrated (100-pt scale)
     @State private var estimateText = ""
     @State private var quantity = 1
-    @State private var size: BottleSize = .standard
+    @State private var size: BottleSize = BottleSize.defaultSize(for: .red)
     @State private var priceText = ""
     @State private var storageLocation = ""
     @State private var drinkFromText = ""
@@ -192,8 +192,8 @@ struct AddWineFlow: View {
                 }
             }
             .onAppear {
-                // New bottles go where the last ones went.
-                if collection == nil { collection = CollectionMemory.lastUsed(in: context) }
+                // New bottles start in the default collection (Settings).
+                if collection == nil { collection = CollectionMemory.defaultCollection(in: context) }
             }
             .task {
                 // Start with the camera: a new bottle usually begins with its label.

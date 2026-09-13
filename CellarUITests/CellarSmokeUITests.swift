@@ -186,6 +186,36 @@ final class CellarSmokeUITests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Settings defaults for new bottles: wine and spirit sizes drive the Add form.
+    func testSettingsBottleSizeDefaults() {
+        func setSizes(wine: String, spirits: String) {
+            app.tabBars.buttons["Cellar"].tap()
+            app.navigationBars["Cellar"].buttons["Settings"].tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5), "settings didn't open")
+            choose(wine, in: "Wine bottle size")
+            choose(spirits, in: "Spirits bottle size")
+            app.navigationBars["Settings"].buttons["Save"].tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 5))
+        }
+        func sizePickerText() -> String {
+            let picker = app.collectionViews.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Size'")).firstMatch
+            reveal(picker)
+            return "\(picker.label) \(picker.value as? String ?? "")"
+        }
+
+        setSizes(wine: "Magnum (1.5 L)", spirits: "700 mL")
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        XCTAssertTrue(app.navigationBars["Add wine"].waitForExistence(timeout: 5))
+        XCTAssertTrue(sizePickerText().contains("Magnum"), "wine default not applied: \(sizePickerText())")
+        choose("Whisky", in: "Type")
+        XCTAssertTrue(sizePickerText().contains("700 mL"), "spirits default not applied: \(sizePickerText())")
+        snapshot("18-settings-defaults")
+        app.navigationBars["Add wine"].buttons["Cancel"].tap()
+
+        // Put the built-in defaults back for other tests.
+        setSizes(wine: "Standard (750 mL)", spirits: "Liter (1 L)")
+    }
+
     /// Edit a saved wine: rename it, change vintage and type, and see the page update.
     func testEditSavedWine() {
         let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
@@ -270,8 +300,8 @@ final class CellarSmokeUITests: XCTestCase {
             endpoint.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
         }
         endpoint.typeText("http://127.0.0.1:8787")
-        app.navigationBars["Pricing"].buttons["Save"].tap()
-        XCTAssertTrue(app.navigationBars["Pricing"].waitForNonExistence(timeout: 5),
+        app.navigationBars["Settings"].buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 5),
                       "Settings rejected the http endpoint")
 
         app.navigationBars["Cellar"].buttons["Add"].tap()

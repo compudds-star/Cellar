@@ -165,9 +165,29 @@ enum BottleSize: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// New bottles start at 750 mL for wine and 1 L for spirits.
+    /// New bottles start at the Settings defaults (750 mL wine, 1 L spirits unless changed).
     static func defaultSize(for type: WineType) -> BottleSize {
-        type.isSpirit ? .liter : .standard
+        type.isSpirit ? BottleDefaults.spirit : BottleDefaults.wine
+    }
+}
+
+/// Default sizes for new bottles, chosen in Settings.
+enum BottleDefaults {
+    static let wineKey = "defaults.wineBottleSize"
+    static let spiritKey = "defaults.spiritBottleSize"
+
+    static var wine: BottleSize {
+        get { size(forKey: wineKey) ?? .standard }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: wineKey) }
+    }
+
+    static var spirit: BottleSize {
+        get { size(forKey: spiritKey) ?? .liter }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: spiritKey) }
+    }
+
+    private static func size(forKey key: String) -> BottleSize? {
+        UserDefaults.standard.string(forKey: key).flatMap(BottleSize.init(rawValue:))
     }
 }
 
