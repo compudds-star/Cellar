@@ -114,7 +114,9 @@ struct RemoteValuationClient: ValuationService, PurchaseService {
         guard let url = comps.url else { return nil }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        // A cold lookup scrapes live listings through the proxy (~30–60 s);
+        // repeats are served from the proxy's 7-day cache.
+        request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         // Credential travels in the header only, never the URL — so it can't
         // land in server logs or a shared link.
