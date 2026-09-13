@@ -7,7 +7,7 @@ final class CellarExportTests: XCTestCase {
     private func makeContext() throws -> ModelContext {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self,
+            for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self, CellarCollection.self,
             configurations: config)
         return ModelContext(container)
     }
@@ -22,6 +22,9 @@ final class CellarExportTests: XCTestCase {
                             drinkFrom: 2026, drinkTo: 2045)
         bottle.wine = wine
         ctx.insert(bottle)
+        let home = CellarCollection(name: "Home")
+        ctx.insert(home)
+        bottle.collection = home
 
         let csv = CellarCSVExporter.csv(for: [wine])
         let lines = csv.split(separator: "\n").map(String.init)
@@ -30,7 +33,7 @@ final class CellarExportTests: XCTestCase {
         let row = lines[1]
         XCTAssertTrue(row.contains("Penfolds"))
         XCTAssertTrue(row.contains("2016"))
-        XCTAssertTrue(row.contains("Rack 1"))
+        XCTAssertTrue(row.contains(",Rack 1,Home,"))   // storage, then collection
         XCTAssertTrue(row.contains("2026"))   // drink from
         XCTAssertTrue(row.contains(",4,"))    // rating (1–5)
     }

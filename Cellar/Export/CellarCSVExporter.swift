@@ -6,7 +6,7 @@ import Foundation
 enum CellarCSVExporter {
     static let columns = [
         "Producer", "Name", "Vintage", "Varietal", "Region", "Country", "Type",
-        "LWIN", "Size", "Status", "Storage", "PurchasePrice", "PurchaseDate",
+        "LWIN", "Size", "Status", "Storage", "Collection", "PurchasePrice", "PurchaseDate",
         "DrinkFrom", "DrinkTo", "YourRating", "CommunityScore",
         "EstUnitValue", "BestOnlinePrice"
     ]
@@ -34,6 +34,7 @@ enum CellarCSVExporter {
                     esc(bottle?.size.label ?? ""),
                     esc(bottle?.status.label ?? ""),
                     esc(bottle?.storageLocation ?? ""),
+                    esc(bottle?.collection?.name ?? ""),
                     bottle?.purchasePrice.map { "\($0)" } ?? "",
                     bottle?.purchaseDate.map { df.string(from: $0) } ?? "",
                     bottle?.drinkFrom.map { "\($0)" } ?? "",

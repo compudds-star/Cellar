@@ -9,7 +9,8 @@ struct CellarStats {
     let valuedBottleCount: Int      // bottles that contributed a real value
     let byType: [(type: WineType, value: Decimal, bottles: Int)]
 
-    init(wines: [Wine]) {
+    /// `scope` limits the totals to one collection (or unassigned bottles).
+    init(wines: [Wine], scope: CollectionScope = .all) {
         var total = Decimal(0)
         var bottles = 0
         var valued = 0
@@ -19,7 +20,7 @@ struct CellarStats {
 
         for wine in wines {
             let unit = wine.estimatedUnitValue
-            let inStock = wine.inStockBottles
+            let inStock = wine.inStockBottles(in: scope)
             if !inStock.isEmpty { winesWithStock += 1 }
             for bottle in inStock {
                 bottles += 1

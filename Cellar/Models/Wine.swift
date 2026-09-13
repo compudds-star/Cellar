@@ -308,6 +308,14 @@ final class Wine {
         inStockBottles.reduce(Decimal(0)) { $0 + $1.estimatedValue(unitValue: estimatedUnitValue) }
     }
 
+    func inStockBottles(in scope: CollectionScope) -> [Bottle] {
+        inStockBottles.filter(scope.includes)
+    }
+
+    func totalEstimatedValue(in scope: CollectionScope) -> Decimal {
+        inStockBottles(in: scope).reduce(Decimal(0)) { $0 + $1.estimatedValue(unitValue: estimatedUnitValue) }
+    }
+
     /// What was paid for the in-stock bottles that have a price recorded (nil if none).
     var totalPaidInStock: Decimal? {
         let prices = inStockBottles.compactMap(\.purchasePrice)
@@ -321,6 +329,8 @@ final class Wine {
 final class Bottle {
     var id: UUID
     var wine: Wine?
+    /// Where the bottle lives (Home, Beach house…); nil = no collection.
+    var collection: CellarCollection?
     var sizeRaw: String
     var statusRaw: String
     var purchasePrice: Decimal?

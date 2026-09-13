@@ -59,7 +59,9 @@ Cellar/                      app source (Swift)
 │   │                        + lwin7 + imageURL), Bottle, ValuationSnapshot,
 │   │                        PurchaseOption, enums (WineType: wine styles + spirit
 │   │                        categories, .tint, .isSpirit, init(lwinType:colour:))
-│   └── TastingNote.swift     dated note + optional 1–5 score
+│   ├── TastingNote.swift     dated note + optional 1–5 score
+│   └── CellarCollection.swift named location for bottles (Home, Beach house) +
+│                            CollectionScope (totals per collection), CollectionMemory
 ├── Scan/                    VisionKit DataScanner live OCR (+ capturePhoto for the
 │                            label image), Vision still-photo fallback, LabelParser (pure)
 ├── LWIN/                    free Liv-ex identity matching: LWINDatabase (loads
@@ -80,7 +82,8 @@ Cellar/                      app source (Swift)
                             SettingsView (endpoint+key), LWINMatchView, ScanSheet,
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
                             BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
-                            PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry)
+                            PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry),
+                            CollectionsView (manage) / CollectionDetailView / CollectionPicker
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv

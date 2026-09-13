@@ -22,6 +22,6 @@ struct RootTabView: View {
 #Preview {
     RootTabView()
         .modelContainer(for: [Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self,
-                              TastingNote.self],
+                              TastingNote.self, CellarCollection.self],
                         inMemory: true)
 }

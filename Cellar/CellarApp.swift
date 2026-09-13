@@ -27,7 +27,7 @@ struct CellarApp: App {
     static func openStore() -> Result<ModelContainer, Error> {
         let schema = Schema([
             Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self,
-            TastingNote.self
+            TastingNote.self, CellarCollection.self
         ])
         // On-device store in Application Support. No CloudKit for the baseline;
         // switch `cloudKitDatabase` to `.automatic` + add the iCloud entitlement

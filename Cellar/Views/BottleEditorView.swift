@@ -11,6 +11,7 @@ struct BottleDraft: Equatable {
     var drinkFromText = ""
     var drinkToText = ""
     var quantity = 1
+    var collection: CellarCollection?
 
     init() {}
 
@@ -22,6 +23,7 @@ struct BottleDraft: Equatable {
         storageLocation = bottle.storageLocation
         drinkFromText = bottle.drinkFrom.map(String.init) ?? ""
         drinkToText = bottle.drinkTo.map(String.init) ?? ""
+        collection = bottle.collection
     }
 
     /// Price paid per bottle; nil when blank or unreadable.
@@ -48,6 +50,7 @@ struct BottleDraft: Equatable {
         bottle.storageLocation = storageLocation.trimmingCharacters(in: .whitespaces)
         bottle.drinkFrom = Int(drinkFromText.trimmingCharacters(in: .whitespaces))
         bottle.drinkTo = Int(drinkToText.trimmingCharacters(in: .whitespaces))
+        bottle.collection = collection
     }
 }
 
@@ -100,6 +103,7 @@ struct BottleEditorView: View {
                 }
 
                 Section("Cellar") {
+                    CollectionPicker(selection: $draft.collection)
                     TextField("Storage location", text: $draft.storageLocation)
                     HStack {
                         TextField("Drink from (year)", text: $draft.drinkFromText)
@@ -108,6 +112,12 @@ struct BottleEditorView: View {
                         TextField("Drink to (year)", text: $draft.drinkToText)
                             .keyboardType(.numberPad)
                     }
+                }
+            }
+            .onAppear {
+                // New bottles go where the last ones went.
+                if bottle == nil, draft.collection == nil {
+                    draft.collection = CollectionMemory.lastUsed(in: context)
                 }
             }
             .navigationTitle(bottle == nil ? "Add bottles" : "Edit bottle")
@@ -133,6 +143,7 @@ struct BottleEditorView: View {
                 draft.apply(to: new)
                 wine.bottles.append(new)
             }
+            CollectionMemory.remember(draft.collection)
             // New bottles are a good moment to refresh the wine's market price.
             PriceLookup.start(for: wine, context: context)
         }

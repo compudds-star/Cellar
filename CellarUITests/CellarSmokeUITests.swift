@@ -102,6 +102,69 @@ final class CellarSmokeUITests: XCTestCase {
         }
     }
 
+    /// Two collections, bottles in each, and a separate total for each on the Value tab.
+    func testCollectionsTotalSeparately() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let home = "Home \(stamp)", beach = "Beach \(stamp)", producer = "Coll \(stamp)"
+
+        app.tabBars.buttons["Value"].tap()
+        tap(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'collections'")).firstMatch)
+        XCTAssertTrue(app.navigationBars["Collections"].waitForExistence(timeout: 5), "collections screen didn't open")
+        for name in [home, beach] {
+            app.navigationBars["Collections"].buttons["New collection"].tap()
+            let field = app.alerts.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            field.typeText(name)
+            app.alerts.buttons["Create"].tap()
+        }
+        XCTAssertTrue(app.staticTexts[beach].waitForExistence(timeout: 5), "collection not created")
+        snapshot("13-collections")
+        app.navigationBars["Collections"].buttons.firstMatch.tap()
+
+        // Two bottles at Home, valued at 100 each.
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        type(producer, into: app.textFields["Producer"])
+        type("100", into: app.textFields["0.00"].firstMatch)
+        let stepper = app.steppers.firstMatch
+        reveal(stepper)
+        stepper.buttons["Increment"].tap()
+        chooseCollection(home)
+        app.navigationBars["Add wine"].buttons["Save"].tap()
+
+        // One more bottle at the beach.
+        let row = cell(containing: producer)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        tap(app.buttons["Add a bottle"])
+        XCTAssertTrue(app.navigationBars["Add bottles"].waitForExistence(timeout: 5))
+        chooseCollection(beach)
+        app.navigationBars["Add bottles"].buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Bottles (3 in stock)"))
+                        .firstMatch.waitForExistence(timeout: 5), "third bottle not added")
+
+        app.tabBars.buttons["Value"].tap()
+        let homeRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", home, "$200.00")).firstMatch
+        let beachRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", beach, "$100.00")).firstMatch
+        reveal(homeRow)
+        XCTAssertTrue(homeRow.waitForExistence(timeout: 5), "Home total should be $200.00")
+        XCTAssertTrue(beachRow.exists, "Beach total should be $100.00")
+        snapshot("14-collection-totals")
+        homeRow.tap()
+        XCTAssertTrue(app.navigationBars[home].waitForExistence(timeout: 5), "collection breakdown didn't open")
+        snapshot("15-collection-detail")
+    }
+
+    private func chooseCollection(_ name: String) {
+        let picker = app.collectionViews.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Collection'")).firstMatch
+        reveal(picker)
+        picker.tap()
+        let option = app.buttons[name].firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 5), "collection option \(name) missing")
+        option.tap()
+    }
+
     /// Crop and rotate a label photo in the Add form. The system photo picker can't be
     /// driven from a test, so a debug-only launch flag seeds a 900×1200 label photo.
     func testEditAndCropLabelPhoto() {

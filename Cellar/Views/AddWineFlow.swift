@@ -40,6 +40,7 @@ struct AddWineFlow: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var editingPhoto = false
     @State private var didAutoStartScanner = false
+    @State private var collection: CellarCollection?
 
     // Canonical LWIN identity, once matched.
     @State private var lwin7: String?
@@ -168,6 +169,7 @@ struct AddWineFlow: View {
                 Section("Add to cellar") {
                     Stepper("Quantity: \(quantity)", value: $quantity, in: 1...240)
                     BottleSizePicker(selection: $size)
+                    CollectionPicker(selection: $collection)
                     HStack {
                         Text("Price paid (per bottle)")
                         Spacer()
@@ -195,6 +197,10 @@ struct AddWineFlow: View {
                 if size == BottleSize.defaultSize(for: oldType) {
                     size = BottleSize.defaultSize(for: newType)
                 }
+            }
+            .onAppear {
+                // New bottles go where the last ones went.
+                if collection == nil { collection = CollectionMemory.lastUsed(in: context) }
             }
             .task {
                 // Start with the camera: a new bottle usually begins with its label.
@@ -321,7 +327,9 @@ struct AddWineFlow: View {
                                     drinkTo: Int(drinkToText))
                 context.insert(bottle)
                 wine.bottles.append(bottle)
+                bottle.collection = collection
             }
+            CollectionMemory.remember(collection)
             // Schedule drink-window reminders for the newly added bottles.
             Task { DrinkWindowNotifier.schedule(for: wine) }
         }

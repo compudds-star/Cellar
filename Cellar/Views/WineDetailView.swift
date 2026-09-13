@@ -119,6 +119,7 @@ struct WineDetailView: View {
                         let bottle = Bottle(size: .defaultSize(for: wine.type))
                         context.insert(bottle)
                         wine.bottles.append(bottle)
+                        bottle.collection = CollectionMemory.lastUsed(in: context)
                         PriceLookup.start(for: wine, context: context)
                     } label: {
                         Label("Move to cellar", systemImage: "tray.and.arrow.down")
@@ -325,8 +326,10 @@ struct BottleRow: View {
             Button(action: onEdit) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(bottle.size.label).font(.subheadline)
-                    if !bottle.storageLocation.isEmpty {
-                        Text(bottle.storageLocation).font(.caption).foregroundStyle(.secondary)
+                    let place = [bottle.collection?.name ?? "", bottle.storageLocation]
+                        .filter { !$0.isEmpty }.joined(separator: " · ")
+                    if !place.isEmpty {
+                        Text(place).font(.caption).foregroundStyle(.secondary)
                     }
                     if let price = bottle.purchasePrice {
                         let date = bottle.purchaseDate.map { " · \($0.formatted(date: .abbreviated, time: .omitted))" } ?? ""

@@ -49,6 +49,22 @@ enum CellarPDFExporter {
             }
             y += 8
 
+            // A total per collection, when bottles are grouped into collections.
+            let collections = Dictionary(grouping: wines.flatMap(\.inStockBottles).compactMap(\.collection), by: \.id)
+                .compactMap { $0.value.first }
+                .sorted { $0.name < $1.name }
+            if !collections.isEmpty {
+                var scopes = collections.map { CollectionScope.collection($0) }
+                if CellarStats(wines: wines, scope: .unassigned).bottleCount > 0 { scopes.append(.unassigned) }
+                for scope in scopes {
+                    let s = CellarStats(wines: wines, scope: scope)
+                    "\(scope.title): \(s.bottleCount) bottle(s) · \(Money.string(s.totalValue))"
+                        .draw(at: CGPoint(x: margin, y: y), withAttributes: subAttr)
+                    y += 16
+                }
+                y += 8
+            }
+
             for wine in sorted {
                 if y > pageRect.height - margin {
                     ctx.beginPage()

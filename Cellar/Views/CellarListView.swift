@@ -10,21 +10,24 @@ struct CellarListView: View {
     @State private var showingSettings = false
     @State private var searchText = ""
     @State private var typeFilter: WineType?
+    @State private var scope: CollectionScope = .all
+    @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
 
     private var filtered: [Wine] {
         wines.filter { wine in
             guard !wine.isWishlist else { return false }
             let matchesType = typeFilter == nil || wine.type == typeFilter
+            let matchesScope = scope == .all || !wine.inStockBottles(in: scope).isEmpty
             let matchesSearch = searchText.isEmpty
                 || wine.displayTitle.localizedCaseInsensitiveContains(searchText)
                 || wine.varietal.localizedCaseInsensitiveContains(searchText)
                 || wine.region.localizedCaseInsensitiveContains(searchText)
-            return matchesType && matchesSearch
+            return matchesType && matchesScope && matchesSearch
         }
     }
 
     private var cellarTotal: Decimal {
-        CellarStats(wines: wines.filter { !$0.isWishlist }).totalValue
+        CellarStats(wines: wines.filter { !$0.isWishlist }, scope: scope).totalValue
     }
 
     var body: some View {
@@ -44,7 +47,7 @@ struct CellarListView: View {
                         Section {
                             ForEach(filtered) { wine in
                                 NavigationLink(value: wine) {
-                                    WineRow(wine: wine)
+                                    WineRow(wine: wine, scope: scope)
                                 }
                             }
                             .onDelete(perform: delete)
@@ -52,14 +55,18 @@ struct CellarListView: View {
                             HStack {
                                 Text("\(filtered.count) wines")
                                 Spacer()
-                                Text("Cellar value \(Money.string(cellarTotal))")
+                                Text("\(scope == .all ? "Cellar" : scope.title) value \(Money.string(cellarTotal))")
                                     .fontWeight(.semibold)
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Cellar")
+            .navigationTitle(scope == .all ? "Cellar" : scope.title)
+            .onChange(of: collections) { _, current in
+                // A deleted collection can't stay selected.
+                if case .collection(let selected) = scope, !current.contains(selected) { scope = .all }
+            }
             .searchable(text: $searchText, prompt: "Search wines")
             .navigationDestination(for: Wine.self) { WineDetailView(wine: $0) }
             .toolbar {
@@ -78,6 +85,19 @@ struct CellarListView: View {
                         }
                     } label: {
                         Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    if !collections.isEmpty {
+                        Menu {
+                            Picker("Collection", selection: $scope) {
+                                Text("All collections").tag(CollectionScope.all)
+                                ForEach(collections) { Text($0.name).tag(CollectionScope.collection($0)) }
+                                Text("No collection").tag(CollectionScope.unassigned)
+                            }
+                        } label: {
+                            Label("Collection", systemImage: scope == .all ? "archivebox" : "archivebox.fill")
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -111,6 +131,8 @@ struct CellarListView: View {
 
 struct WineRow: View {
     let wine: Wine
+    /// Counts and values only the bottles in this collection.
+    var scope: CollectionScope = .all
 
     var body: some View {
         HStack(spacing: 12) {
@@ -126,9 +148,9 @@ struct WineRow: View {
                         StarsInline(rating: rating)
                     }
                     if !wine.isWishlist {
-                        Text("\(wine.inStockCount) in stock").font(.caption).foregroundStyle(.secondary)
+                        Text("\(wine.inStockBottles(in: scope).count) in stock").font(.caption).foregroundStyle(.secondary)
                         if wine.hasValuation {
-                            Text("· \(Money.string(wine.totalEstimatedValue))")
+                            Text("· \(Money.string(wine.totalEstimatedValue(in: scope)))")
                                 .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
                         }
                     } else if let best = wine.bestOfferPrice {
