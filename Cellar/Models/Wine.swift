@@ -101,8 +101,9 @@ final class Wine {
     /// Critic/community score from the pricing endpoint (nil until fetched).
     var communityScore: Int?
     /// True = a wine you want but don't own yet (shown on the Wishlist tab,
-    /// excluded from cellar value). Owned wines are false.
-    var isWishlist: Bool
+    /// excluded from cellar value). Owned wines are false. Defaulted so stores
+    /// created before this field existed migrate (existing wines = owned).
+    var isWishlist: Bool = false
     var createdAt: Date
 
     @Relationship(deleteRule: .cascade, inverse: \Bottle.wine)
