@@ -1,0 +1,14 @@
+{
+  "name": "cellar-proxy",
+  "version": "1.0.0",
+  "description": "Pricing proxy for the Cellar iOS app. Holds the provider API key server-side and adapts Wine-Searcher / Apify into the app's JSON contract.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

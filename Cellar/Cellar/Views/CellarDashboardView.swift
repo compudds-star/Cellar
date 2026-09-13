@@ -2,10 +2,18 @@ import SwiftUI
 import SwiftData
 import Charts
 
+private struct ExportItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct CellarDashboardView: View {
     @Query private var wines: [Wine]
+    @State private var exportItem: ExportItem?
+    @State private var exportError: String?
 
-    private var stats: CellarStats { CellarStats(wines: wines) }
+    private var owned: [Wine] { wines.filter { !$0.isWishlist } }
+    private var stats: CellarStats { CellarStats(wines: owned) }
 
     var body: some View {
         NavigationStack {
@@ -51,7 +59,35 @@ struct CellarDashboardView: View {
                 }
             }
             .navigationTitle("Value")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            export { try CellarCSVExporter.write(owned) }
+                        } label: { Label("Export CSV", systemImage: "tablecells") }
+                        Button {
+                            export { try CellarPDFExporter.write(owned) }
+                        } label: { Label("Export PDF summary", systemImage: "doc.richtext") }
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(owned.isEmpty)
+                }
+            }
+            .sheet(item: $exportItem) { item in
+                ShareSheet(items: [item.url])
+            }
+            .alert("Export failed", isPresented: .constant(exportError != nil)) {
+                Button("OK") { exportError = nil }
+            } message: {
+                Text(exportError ?? "")
+            }
         }
+    }
+
+    private func export(_ make: () throws -> URL) {
+        do { exportItem = ExportItem(url: try make()) }
+        catch { exportError = error.localizedDescription }
     }
 
     private func stat(_ label: String, _ value: String) -> some View {

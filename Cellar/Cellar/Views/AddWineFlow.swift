@@ -8,6 +8,12 @@ struct AddWineFlow: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
+    enum Destination: String, CaseIterable, Identifiable {
+        case cellar = "Cellar", wishlist = "Wishlist"
+        var id: String { rawValue }
+    }
+    @State private var destination: Destination = .cellar
+
     // Wine fields
     @State private var producer = ""
     @State private var name = ""
@@ -20,14 +26,28 @@ struct AddWineFlow: View {
     @State private var labelImage: Data?
 
     // Valuation + inventory
+    @State private var rating = 0            // 0 = unrated (100-pt scale)
     @State private var estimateText = ""
     @State private var quantity = 1
     @State private var size: BottleSize = .standard
     @State private var priceText = ""
     @State private var storageLocation = ""
+    @State private var drinkFromText = ""
+    @State private var drinkToText = ""
 
     @State private var showingScanner = false
+    @State private var showingLWIN = false
     @State private var photoItem: PhotosPickerItem?
+
+    // Canonical LWIN identity, once matched.
+    @State private var lwin7: String?
+    @State private var lwinTitle = ""
+
+    private var vintageInt: Int? { Int(vintageText) }
+    private var canMatchLWIN: Bool {
+        !producer.trimmingCharacters(in: .whitespaces).isEmpty
+        || !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
 
     private var canSave: Bool {
         !producer.trimmingCharacters(in: .whitespaces).isEmpty
@@ -37,6 +57,13 @@ struct AddWineFlow: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("Save to", selection: $destination) {
+                        ForEach(Destination.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section {
                     Button {
                         showingScanner = true
@@ -65,6 +92,40 @@ struct AddWineFlow: View {
                     }
                 }
 
+                Section("Wine identity (LWIN)") {
+                    if let lwin7 {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(lwinTitle.isEmpty ? "Matched" : lwinTitle).lineLimit(1)
+                                Text("LWIN \(lwin7)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Change") { showingLWIN = true }
+                        }
+                    } else {
+                        Button {
+                            showingLWIN = true
+                        } label: {
+                            Label("Find LWIN match", systemImage: "checkmark.seal")
+                        }
+                        .disabled(!canMatchLWIN)
+                        Text("Optional. Snaps this wine to a canonical identity for de-duping and price lookups.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Your rating") {
+                    HStack {
+                        StarRating(rating: $rating)
+                        Spacer()
+                        if rating > 0 {
+                            Button("Clear") { rating = 0 }
+                                .font(.caption).buttonStyle(.borderless)
+                        }
+                    }
+                }
+
                 Section("Estimated value") {
                     HStack {
                         Text("Per 750 mL")
@@ -77,6 +138,7 @@ struct AddWineFlow: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                if destination == .cellar {
                 Section("Add to cellar") {
                     Stepper("Quantity: \(quantity)", value: $quantity, in: 1...240)
                     Picker("Size", selection: $size) {
@@ -90,6 +152,14 @@ struct AddWineFlow: View {
                             .multilineTextAlignment(.trailing)
                     }
                     TextField("Storage location", text: $storageLocation)
+                    HStack {
+                        TextField("Drink from (year)", text: $drinkFromText)
+                            .keyboardType(.numberPad)
+                        Divider()
+                        TextField("Drink to (year)", text: $drinkToText)
+                            .keyboardType(.numberPad)
+                    }
+                }
                 }
 
                 Section {
@@ -107,7 +177,18 @@ struct AddWineFlow: View {
                 }
             }
             .sheet(isPresented: $showingScanner) {
-                ScanSheet { parsed in apply(parsed) }
+                ScanSheet { parsed, image in
+                    apply(parsed)
+                    if let image, let data = image.jpegData(compressionQuality: 0.9) {
+                        labelImage = ImageResizer.jpeg(from: data, maxDimension: 1200)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingLWIN) {
+                LWINMatchView(producer: producer, name: name, region: region,
+                              vintage: vintageInt) { record in
+                    applyLWIN(record)
+                }
             }
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
@@ -130,6 +211,23 @@ struct AddWineFlow: View {
         type = parsed.type
     }
 
+    /// Adopt a chosen LWIN record: store the identity and backfill any blank fields.
+    private func applyLWIN(_ record: LWINRecord) {
+        lwin7 = record.lwin7
+        lwinTitle = record.title
+        if producer.isEmpty { producer = record.producerName }
+        if name.isEmpty { name = record.wine }
+        if region.isEmpty { region = record.region }
+        if country.isEmpty { country = record.country }
+        // Derive type from the record's colour/type when we don't already have one.
+        let colour = record.colour.lowercased()
+        let recType = record.type.lowercased()
+        if recType.contains("sparkling") { type = .sparkling }
+        else if colour.contains("ros") { type = .rose }
+        else if colour.contains("white") { type = .white }
+        else if colour.contains("red") { type = .red }
+    }
+
     private func save() {
         let wine = Wine(
             name: name.trimmingCharacters(in: .whitespaces),
@@ -139,19 +237,28 @@ struct AddWineFlow: View {
             country: country.trimmingCharacters(in: .whitespaces),
             vintage: Int(vintageText),
             type: type,
+            lwin7: lwin7,
             labelImage: labelImage,
             notes: notes,
-            manualEstimatedValue: Decimal(string: estimateText))
+            manualEstimatedValue: Decimal(string: estimateText),
+            rating: rating > 0 ? rating : nil,
+            isWishlist: destination == .wishlist)
         context.insert(wine)
 
-        let price = Decimal(string: priceText)
-        for _ in 0..<quantity {
-            let bottle = Bottle(size: size,
-                                purchasePrice: price,
-                                purchaseDate: price != nil ? .now : nil,
-                                storageLocation: storageLocation)
-            bottle.wine = wine
-            context.insert(bottle)
+        if destination == .cellar {
+            let price = Decimal(string: priceText)
+            for _ in 0..<quantity {
+                let bottle = Bottle(size: size,
+                                    purchasePrice: price,
+                                    purchaseDate: price != nil ? .now : nil,
+                                    storageLocation: storageLocation,
+                                    drinkFrom: Int(drinkFromText),
+                                    drinkTo: Int(drinkToText))
+                bottle.wine = wine
+                context.insert(bottle)
+            }
+            // Schedule drink-window reminders for the newly added bottles.
+            Task { DrinkWindowNotifier.schedule(for: wine) }
         }
         dismiss()
     }

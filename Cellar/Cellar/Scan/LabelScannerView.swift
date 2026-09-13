@@ -15,6 +15,8 @@ import UIKit
 final class ScanBuffer: ObservableObject {
     @Published private(set) var lines: [String] = []
     private var seenSet: Set<String> = []
+    /// Set by the representable so the SwiftUI layer can grab a still frame.
+    weak var scanner: DataScannerViewController?
 
     func ingest(_ s: String) {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -23,6 +25,12 @@ final class ScanBuffer: ObservableObject {
         lines.append(t)
     }
     func reset() { lines = []; seenSet = [] }
+
+    /// Capture a still photo of the current frame (the scanned label).
+    @MainActor
+    func capturePhoto() async -> UIImage? {
+        try? await scanner?.capturePhoto()
+    }
 }
 
 struct LabelScannerView: UIViewControllerRepresentable {
@@ -39,6 +47,7 @@ struct LabelScannerView: UIViewControllerRepresentable {
             isHighlightingEnabled: true)
         scanner.delegate = context.coordinator
         context.coordinator.scanner = scanner
+        buffer.scanner = scanner
         return scanner
     }
 

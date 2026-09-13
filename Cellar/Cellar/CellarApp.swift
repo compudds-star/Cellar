@@ -7,7 +7,8 @@ struct CellarApp: App {
 
     init() {
         let schema = Schema([
-            Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self
+            Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self,
+            TastingNote.self
         ])
         // On-device store in Application Support. No CloudKit for the baseline;
         // switch `cloudKitDatabase` to `.automatic` + add the iCloud entitlement

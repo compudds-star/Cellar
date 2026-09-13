@@ -1,0 +1,24 @@
+[Unit]
+Description=Cellar pricing proxy
+After=network.target
+
+[Service]
+Type=simple
+# Dedicated unprivileged user; create with: sudo useradd -r -s /usr/sbin/nologin cellar
+User=cellar
+Group=cellar
+WorkingDirectory=/opt/cellar-proxy
+# Secrets live in this root-owned, 0600 file — NOT in the unit and NOT in git.
+EnvironmentFile=/etc/cellar-proxy.env
+ExecStart=/usr/bin/node /opt/cellar-proxy/server.js
+Restart=on-failure
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=
+
+[Install]
+WantedBy=multi-user.target

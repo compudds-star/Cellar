@@ -7,11 +7,13 @@ struct CellarListView: View {
     private var wines: [Wine]
 
     @State private var showingAdd = false
+    @State private var showingSettings = false
     @State private var searchText = ""
     @State private var typeFilter: WineType?
 
     private var filtered: [Wine] {
         wines.filter { wine in
+            guard !wine.isWishlist else { return false }
             let matchesType = typeFilter == nil || wine.type == typeFilter
             let matchesSearch = searchText.isEmpty
                 || wine.displayTitle.localizedCaseInsensitiveContains(searchText)
@@ -22,13 +24,13 @@ struct CellarListView: View {
     }
 
     private var cellarTotal: Decimal {
-        CellarStats(wines: wines).totalValue
+        CellarStats(wines: wines.filter { !$0.isWishlist }).totalValue
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if wines.isEmpty {
+                if !wines.contains(where: { !$0.isWishlist }) {
                     ContentUnavailableView {
                         Label("Your cellar is empty", systemImage: "wineglass")
                     } description: {
@@ -73,6 +75,11 @@ struct CellarListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingSettings = true } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showingAdd = true } label: {
                         Label("Add", systemImage: "plus")
                     }
@@ -80,6 +87,13 @@ struct CellarListView: View {
             }
             .sheet(isPresented: $showingAdd) {
                 AddWineFlow()
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
+            }
+            // Rebuild drink-window reminders when the cellar's composition changes.
+            .task(id: wines.count) {
+                await DrinkWindowNotifier.rescheduleAll(for: wines)
             }
         }
     }
@@ -94,43 +108,29 @@ struct WineRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            LabelThumbnail(data: wine.labelImage, type: wine.type)
-            VStack(alignment: .leading, spacing: 2) {
+            WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(wine.displayTitle).font(.headline).lineLimit(2)
-                Text([wine.varietal, wine.region].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.subheadline).foregroundStyle(.secondary)
+                let sub = [wine.varietal, wine.region].filter { !$0.isEmpty }.joined(separator: " · ")
+                if !sub.isEmpty {
+                    Text(sub).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
                 HStack(spacing: 6) {
-                    Text("\(wine.inStockCount) in stock").font(.caption)
-                    if wine.hasValuation {
-                        Text(Money.string(wine.totalEstimatedValue))
-                            .font(.caption).fontWeight(.semibold)
-                    } else {
-                        Text("no estimate").font(.caption).foregroundStyle(.tertiary)
+                    if let rating = wine.rating, rating > 0 {
+                        StarsInline(rating: rating)
+                    }
+                    if !wine.isWishlist {
+                        Text("\(wine.inStockCount) in stock").font(.caption).foregroundStyle(.secondary)
+                        if wine.hasValuation {
+                            Text("· \(Money.string(wine.totalEstimatedValue))")
+                                .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                        }
+                    } else if let best = wine.bestOfferPrice {
+                        Text("from \(Money.string(best))").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-struct LabelThumbnail: View {
-    let data: Data?
-    let type: WineType
-
-    var body: some View {
-        Group {
-            if let data, let ui = UIImage(data: data) {
-                Image(uiImage: ui).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Rectangle().fill(.quaternary)
-                    Image(systemName: "wineglass").foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(width: 44, height: 60)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }

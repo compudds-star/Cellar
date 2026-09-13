@@ -9,7 +9,15 @@ struct MerchantOffer: Identifiable {
     var price: Decimal?
     var currency: String = "USD"
     var productURL: URL?
+    var address: String?
+    var latitude: Double?
+    var longitude: Double?
     var inStock: Bool = true
+
+    var coordinate: CLLocationCoordinate2D? {
+        guard let latitude, let longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
 }
 
 /// "Where can I buy this online, and for how much?" Stubbed for the offline

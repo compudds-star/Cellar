@@ -90,31 +90,77 @@ concrete `ValuationService`/`PurchaseService` you add next; see below.
 
 ---
 
-## Adding online valuation & pricing later (no UI changes)
+## Online valuation & offers — built (Wine-Searcher / any provider)
 
-1. Stand up a small proxy on your Oracle host (holds the Wine-Searcher / retailer
-   API key, caches responses, rate-limits per device). The app never sees the key.
-2. Implement the protocols against it:
-   ```swift
-   struct WineSearcherValuationService: ValuationService {
-       func estimate(for wine: Wine) async throws -> ValuationResult? { /* call your proxy */ }
-   }
-   struct ProxyPurchaseService: PurchaseService {
-       func offers(for wine: Wine) async throws -> [MerchantOffer] { /* call your proxy */ }
-   }
-   ```
-3. Swap the instances in `WhereToBuyView` / wherever you refresh valuations, and
-   persist results as `ValuationSnapshot` / `PurchaseOption` rows. Done.
+`Valuation/RemoteValuationClient` implements both `ValuationService` and
+`PurchaseService` against **one provider-agnostic JSON endpoint**, so the app
+never encodes any single provider's schema. Your proxy (or a direct adapter)
+maps Wine-Searcher / Apify / CellarTracker into this contract:
+
+```
+GET {baseURL}/valuation?lwin={lwin11}&q={producer name}&vintage={year}&currency=USD
+→ { "average": 189.00, "min": 165.00, "max": 220.00, "currency": "USD",
+    "offers": [ { "merchant": "…", "price": 175.00, "currency": "USD",
+                  "url": "https://…", "address": "…",
+                  "latitude": 41.0, "longitude": -73.7, "inStock": true } ] }
+```
+
+- `ValuationCoordinator` picks the remote service when configured, enforces a
+  **7-day cache per wine** (a paid API is hit at most once per wine per week),
+  and persists results as `ValuationSnapshot` + `PurchaseOption` rows.
+- **Refresh price online** (wine detail) and **Refresh offers** (Where to buy)
+  trigger it; offers render with an Open link and Directions when a store
+  coordinate is present. Nearby-store search (MapKit) still works with no
+  endpoint at all.
+
+**Configure it** in Settings (gear icon):
+- **Endpoint** (`baseURL`) — stored in UserDefaults, must be HTTPS. Point it at
+  your Oracle-host proxy (recommended) or directly at a provider.
+- **API key** — stored in the **Keychain** (device-only, `ThisDeviceOnly`),
+  never in the bundle/`Info.plist`/logs; sent only as a `Bearer` header, never
+  in the URL. Leave blank if your proxy holds the key.
 
 **Security notes** (per your standing preference to check as you build):
-- API keys live on the proxy, never in the bundle or `Info.plist`.
-- All traffic is HTTPS; pin if you want, but at minimum validate the host.
-- The proxy rate-limits per install token so a leaked build can't run up your
-  API bill.
+- Key in Keychain, not the binary; HTTPS enforced (an `http://` endpoint is
+  rejected as "not configured"); credential never in the query string.
+- Recommended: proxy holds the real provider key and rate-limits per install so
+  a leaked build can't run up your API bill.
 - Cellar data is on-device only (`NSFileProtectionComplete`); nothing leaves the
   phone except the wine identity you send to price it.
+- The 7-day TTL keeps your Wine-Searcher trial (100 free calls/day) or Apify
+  per-wine (~2.5¢) cost negligible for a personal cellar.
 
 ---
+
+## Wine identity — LWIN matching (free, built in)
+
+`LWIN/*` snaps a scanned/typed wine to a canonical **Liv-ex Wine Identification
+Number** (the "ISBN for wine"). It's free, needs no API approval, and gives you
+a stable de-dup/identity key that a pricing API can later look the wine up by.
+
+- `LWINDatabase` loads a CSV once and builds an inverted token index (scores only
+  records sharing a token with the query, not all ~200k rows).
+- `LWINMatcher` scores candidates by token recall + Jaccard, with small bonuses
+  for matching region and a plausible vintage; returns ranked matches.
+- In **Add wine**, "Find LWIN match" opens `LWINMatchView`; picking a result
+  stores `Wine.lwin7` and backfills blank fields. `Wine.lwin11` composes
+  wine + vintage (NV → Liv-ex's `1000`).
+
+**Ships with a 20-wine sample** (`Cellar/Resources/lwin_sample.csv`) so the
+feature works immediately. The sample's codes start at `9000001` and are
+**illustrative, not authoritative** — replace them with the real database for
+full coverage and correct codes:
+
+1. Download the free LWIN database from Liv-ex (`liv-ex.com/lwin/`, Creative
+   Commons) as CSV.
+2. Drop it at `Cellar/Cellar/Resources/LWIN.csv`.
+3. Rebuild. `LWINDatabase` prefers `LWIN.csv` over the sample automatically; the
+   parser maps columns by header name (`LWIN`, `DISPLAY_NAME`, `PRODUCER_NAME`,
+   `WINE`, `COUNTRY`, `REGION`, `COLOUR`, `TYPE`, `FIRST_VINTAGE`,
+   `FINAL_VINTAGE`/`LATEST_VINTAGE`) so header order/extra columns don't matter.
+
+Because the sample codes aren't authoritative, don't feed a sample-derived
+`lwin7` to a pricing API as if it were real — swap in the Liv-ex file first.
 
 ## Common cellar-app features included / easy next
 

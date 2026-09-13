@@ -30,6 +30,13 @@
 	<string>Cellar uses your location only to find nearby wine stores that carry a bottle and give directions. Your location is never stored or shared.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Allow cleartext ONLY to local hosts (a dev pricing proxy on your Mac at
+	     http://127.0.0.1). Real remote endpoints still require HTTPS under ATS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -6,22 +6,25 @@ struct WineDetailView: View {
     @Environment(\.modelContext) private var context
     @State private var estimateText = ""
     @State private var editingEstimate = false
+    @State private var refreshing = false
+    @State private var errorMessage: String?
 
     var body: some View {
         List {
-            if let data = wine.labelImage, let ui = UIImage(data: data) {
-                Section {
-                    Image(uiImage: ui).resizable().scaledToFit()
-                        .frame(maxWidth: .infinity).frame(maxHeight: 220)
-                }
-                .listRowInsets(EdgeInsets())
+            Section {
+                headerImage
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 240)
+                    .clipped()
             }
+            .listRowInsets(EdgeInsets())
 
             Section("Details") {
                 detailRow("Varietal", wine.varietal)
                 detailRow("Region", [wine.region, wine.country].filter { !$0.isEmpty }.joined(separator: ", "))
                 detailRow("Type", wine.type.label)
                 detailRow("Vintage", wine.vintage.map(String.init) ?? "NV")
+                detailRow("LWIN", wine.lwin11 ?? wine.lwin7 ?? "")
             }
 
             Section("Value") {
@@ -50,9 +53,69 @@ struct WineDetailView: View {
                     Spacer()
                     Text(Money.string(wine.totalEstimatedValue)).fontWeight(.semibold)
                 }
+                if let best = wine.bestOfferPrice {
+                    HStack {
+                        Text("Best online price")
+                        Spacer()
+                        Text(Money.string(best)).foregroundStyle(.green)
+                    }
+                }
                 if let snap = wine.latestValuation {
                     Text("From \(snap.source), \(snap.asOf.formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                Button {
+                    Task { await refreshPrice() }
+                } label: {
+                    HStack {
+                        Label("Refresh price online", systemImage: "arrow.clockwise")
+                        if refreshing { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(refreshing)
+            }
+
+            Section("Rating") {
+                HStack {
+                    Text("Your rating")
+                    Spacer()
+                    StarRating(rating: Binding(get: { wine.rating ?? 0 },
+                                               set: { wine.rating = $0 > 0 ? $0 : nil }),
+                               size: 22)
+                }
+                if let score = wine.communityScore {
+                    HStack {
+                        Text("Critic / community")
+                        Spacer()
+                        Text("\(score) pts").foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if wine.isWishlist {
+                Section {
+                    Button {
+                        wine.isWishlist = false
+                        let bottle = Bottle(size: .standard)
+                        bottle.wine = wine
+                        context.insert(bottle)
+                    } label: {
+                        Label("Move to cellar", systemImage: "tray.and.arrow.down")
+                    }
+                }
+            }
+
+            Section("Tasting notes") {
+                ForEach(wine.tastingNotes.sorted { $0.date > $1.date }) { note in
+                    TastingNoteRow(note: note)
+                }
+                .onDelete(perform: deleteNotes)
+                Button {
+                    let note = TastingNote(text: "")
+                    note.wine = wine
+                    context.insert(note)
+                } label: {
+                    Label("Add note", systemImage: "plus")
                 }
             }
 
@@ -83,6 +146,55 @@ struct WineDetailView: View {
         }
         .navigationTitle(wine.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Couldn't fetch price", isPresented: .constant(errorMessage != nil)) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private func refreshPrice() async {
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        do {
+            let updated = try await ValuationCoordinator.refresh(wine, context: context, force: true)
+            if !updated {
+                errorMessage = "No pricing was returned for this wine."
+            }
+        } catch let error as ValuationError {
+            errorMessage = error.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteNotes(at offsets: IndexSet) {
+        let sorted = wine.tastingNotes.sorted { $0.date > $1.date }
+        for index in offsets { context.delete(sorted[index]) }
+    }
+
+    @ViewBuilder
+    private var headerImage: some View {
+        if let data = wine.labelImage, let ui = UIImage(data: data) {
+            Image(uiImage: ui).resizable().scaledToFill()
+        } else if let s = wine.imageURL, let url = URL(string: s) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image { image.resizable().scaledToFill() }
+                else { headerPlaceholder }
+            }
+        } else {
+            headerPlaceholder
+        }
+    }
+
+    private var headerPlaceholder: some View {
+        ZStack {
+            LinearGradient(colors: [wine.type.tint.opacity(0.85), wine.type.tint.opacity(0.5)],
+                           startPoint: .top, endPoint: .bottom)
+            Image(systemName: "wineglass.fill")
+                .font(.system(size: 64)).foregroundStyle(.white.opacity(0.9))
+        }
     }
 
     @ViewBuilder
@@ -93,6 +205,25 @@ struct WineDetailView: View {
                 Spacer()
                 Text(value)
             }
+        }
+    }
+}
+
+struct TastingNoteRow: View {
+    @Bindable var note: TastingNote
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(note.date.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                StarRating(rating: Binding(get: { note.score ?? 0 },
+                                           set: { note.score = $0 > 0 ? $0 : nil }),
+                           size: 16)
+            }
+            TextField("Tasting note", text: $note.text, axis: .vertical)
+                .lineLimit(1...6)
         }
     }
 }

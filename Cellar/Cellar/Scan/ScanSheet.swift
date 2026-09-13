@@ -6,7 +6,8 @@ import PhotosUI
 /// parsed label to the caller.
 struct ScanSheet: View {
     @Environment(\.dismiss) private var dismiss
-    var onParsed: (ParsedLabel) -> Void
+    /// Returns the parsed label plus a still photo of it (nil if capture failed).
+    var onParsed: (ParsedLabel, UIImage?) -> Void
 
     @StateObject private var buffer = ScanBuffer()
     @State private var photoItem: PhotosPickerItem?
@@ -48,13 +49,18 @@ struct ScanSheet: View {
                     .lineLimit(2).padding(.horizontal)
             }
             Button {
-                onParsed(LabelParser.parse(lines: buffer.lines))
-                dismiss()
+                let parsed = LabelParser.parse(lines: buffer.lines)
+                Task {
+                    let image = await buffer.capturePhoto()
+                    onParsed(parsed, image)
+                    dismiss()
+                }
             } label: {
                 Label("Use this label", systemImage: "checkmark.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(buffer.lines.isEmpty)
             .padding()
         }
@@ -80,7 +86,7 @@ struct ScanSheet: View {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     let lines = await ImageTextRecognizer.recognize(in: image)
-                    onParsed(LabelParser.parse(lines: lines))
+                    onParsed(LabelParser.parse(lines: lines), image)
                 }
                 busy = false
                 dismiss()

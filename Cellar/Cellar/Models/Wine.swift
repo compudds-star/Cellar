@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 // MARK: - Enums
 
@@ -10,6 +11,18 @@ enum WineType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .rose: return "Rosé"
         default: return rawValue.capitalized
+        }
+    }
+    /// Accent used for placeholder tiles and small type cues.
+    var tint: Color {
+        switch self {
+        case .red, .fortified: return Color(red: 0.44, green: 0.08, blue: 0.18)
+        case .white: return Color(red: 0.80, green: 0.70, blue: 0.35)
+        case .rose: return Color(red: 0.90, green: 0.55, blue: 0.60)
+        case .sparkling: return Color(red: 0.86, green: 0.74, blue: 0.42)
+        case .dessert: return Color(red: 0.70, green: 0.45, blue: 0.18)
+        case .orange: return Color(red: 0.85, green: 0.55, blue: 0.25)
+        case .other: return Color.gray
         }
     }
 }
@@ -70,13 +83,26 @@ final class Wine {
     var country: String
     /// nil = non-vintage (NV), common for Champagne.
     var vintage: Int?
+    /// Canonical Liv-ex wine identity (7-digit LWIN), when matched. Stable
+    /// dedup/identity key and the handle a pricing API can look the wine up by.
+    var lwin7: String?
     var typeRaw: String
     /// JPEG of the label the user scanned/added. Kept small (resized on save).
     @Attribute(.externalStorage) var labelImage: Data?
+    /// Fallback label image URL from the pricing database, shown when there's no
+    /// scanned photo. Defaulted (not an init param) — set by the pricing refresh.
+    var imageURL: String? = nil
     var notes: String
     /// A manual override for the per-750mL estimated value. When set, it wins
     /// over any valuation snapshot. This is the offline-first source of truth.
     var manualEstimatedValue: Decimal?
+    /// Your own rating on the 100-point scale (nil = unrated).
+    var rating: Int?
+    /// Critic/community score from the pricing endpoint (nil until fetched).
+    var communityScore: Int?
+    /// True = a wine you want but don't own yet (shown on the Wishlist tab,
+    /// excluded from cellar value). Owned wines are false.
+    var isWishlist: Bool
     var createdAt: Date
 
     @Relationship(deleteRule: .cascade, inverse: \Bottle.wine)
@@ -85,6 +111,8 @@ final class Wine {
     var valuations: [ValuationSnapshot]
     @Relationship(deleteRule: .cascade, inverse: \PurchaseOption.wine)
     var purchaseOptions: [PurchaseOption]
+    @Relationship(deleteRule: .cascade, inverse: \TastingNote.wine)
+    var tastingNotes: [TastingNote]
 
     init(name: String,
          producer: String = "",
@@ -93,9 +121,12 @@ final class Wine {
          country: String = "",
          vintage: Int? = nil,
          type: WineType = .red,
+         lwin7: String? = nil,
          labelImage: Data? = nil,
          notes: String = "",
-         manualEstimatedValue: Decimal? = nil) {
+         manualEstimatedValue: Decimal? = nil,
+         rating: Int? = nil,
+         isWishlist: Bool = false) {
         self.id = UUID()
         self.name = name
         self.producer = producer
@@ -103,14 +134,18 @@ final class Wine {
         self.region = region
         self.country = country
         self.vintage = vintage
+        self.lwin7 = lwin7
         self.typeRaw = type.rawValue
         self.labelImage = labelImage
         self.notes = notes
         self.manualEstimatedValue = manualEstimatedValue
+        self.rating = rating
+        self.isWishlist = isWishlist
         self.createdAt = .now
         self.bottles = []
         self.valuations = []
         self.purchaseOptions = []
+        self.tastingNotes = []
     }
 
     var type: WineType {
@@ -122,6 +157,12 @@ final class Wine {
         let v = vintage.map { String($0) } ?? "NV"
         let head = [producer, name].filter { !$0.isEmpty }.joined(separator: " ")
         return head.isEmpty ? "\(v) Unknown wine" : "\(v) \(head)"
+    }
+
+    /// Full 11-digit LWIN (wine + vintage), when the wine has a matched identity.
+    var lwin11: String? {
+        guard let lwin7 else { return nil }
+        return LWINMatcher.lwin11(lwin7: lwin7, vintage: vintage)
     }
 
     // MARK: Valuation
@@ -144,6 +185,11 @@ final class Wine {
     /// knows the cellar total is understated.
     var hasValuation: Bool {
         manualEstimatedValue != nil || latestValuation != nil
+    }
+
+    /// Lowest in-stock online offer price, if any offers have been fetched.
+    var bestOfferPrice: Decimal? {
+        purchaseOptions.filter { $0.inStock }.compactMap { $0.price }.min()
     }
 
     var inStockBottles: [Bottle] { bottles.filter { $0.status.isInCellar } }
