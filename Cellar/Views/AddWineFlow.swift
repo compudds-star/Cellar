@@ -195,6 +195,12 @@ struct AddWineFlow: View {
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self) {
                         labelImage = ImageResizer.jpeg(from: data, maxDimension: 1200)
+                        // Read the label too — but only into an empty form, never
+                        // over what the user already typed.
+                        if producer.isEmpty, name.isEmpty, let image = UIImage(data: data) {
+                            let lines = await ImageTextRecognizer.recognizeLines(in: image)
+                            if !lines.isEmpty { apply(LabelParser.parse(textLines: lines)) }
+                        }
                     }
                 }
             }
@@ -209,6 +215,13 @@ struct AddWineFlow: View {
         if !parsed.country.isEmpty { country = parsed.country }
         if let v = parsed.vintage { vintageText = String(v) }
         type = parsed.type
+        // Snap to a confident LWIN match: canonical identity plus backfilled fields.
+        if lwin7 == nil,
+           let best = LWINMatcher().match(producer: producer, name: name, region: region,
+                                          vintage: vintageInt, limit: 1).first,
+           best.score >= 0.8 {
+            applyLWIN(best.record)
+        }
     }
 
     /// Adopt a chosen LWIN record: store the identity and backfill any blank fields.

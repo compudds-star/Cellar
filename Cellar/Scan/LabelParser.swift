@@ -15,6 +15,14 @@ struct ParsedLabel: Equatable {
     var rawLines: [String] = []
 }
 
+/// One OCR'd line plus how big it was printed, so the parser can prefer the
+/// most prominent text — producers and cuvées are set largest on a label.
+struct LabelTextLine: Equatable {
+    var text: String
+    /// Line height as a fraction of the image (or view) height; 0 = unknown.
+    var height: Double = 0
+}
+
 /// Deterministic, dependency-free heuristics over OCR text. Pure function →
 /// fully unit-testable without a camera. This is intentionally conservative:
 /// it fills what it is confident about and leaves the rest blank.
@@ -52,72 +60,164 @@ enum LabelParser {
         "stellenbosch": "South Africa"
     ]
 
-    static func parse(lines rawLines: [String]) -> ParsedLabel {
-        var result = ParsedLabel()
-        result.rawLines = rawLines
+    /// Phrases that mark a line as boilerplate rather than a producer or cuvée.
+    static let metaMarkers: [String] = [
+        "ml", "alc", "vol", "%", "750", "product of", "produce of", "bottled by",
+        "mis en bouteille", "imported by", "sulfite", "sulphite", "government warning",
+        "contains", "appellation", "denominazione", "denominación", "estate bottled",
+        "red wine", "white wine", "table wine", "vin rouge", "vin blanc", "vino rosso",
+        "vino tinto", "www.", ".com"
+    ]
 
-        let cleaned = rawLines
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let joinedLower = cleaned.joined(separator: " ").lowercased()
+    static func parse(lines rawLines: [String]) -> ParsedLabel {
+        parse(textLines: rawLines.map { LabelTextLine(text: $0) })
+    }
+
+    static func parse(textLines: [LabelTextLine]) -> ParsedLabel {
+        var result = ParsedLabel()
+        result.rawLines = textLines.map(\.text)
+
+        let cleaned = textLines
+            .map { LabelTextLine(text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines), height: $0.height) }
+            .filter { !$0.text.isEmpty }
+        let texts = cleaned.map(\.text)
+        let words = normalizedWords(texts.joined(separator: " "))
+        let wordSet = Set(words)
 
         // Vintage: a 4-digit year in a plausible range. Non-vintage stays nil.
-        result.vintage = findVintage(in: cleaned)
+        result.vintage = findVintage(in: texts)
 
-        // Varietal.
-        if let v = varietals.first(where: { joinedLower.contains($0) }) {
+        // Varietal (tolerates small OCR slips).
+        if let v = varietals.first(where: { matches(phrase: $0, in: words) }) {
             result.varietal = titleCased(v)
             result.type = wineType(forVarietal: v)
         }
 
-        // Region + country.
-        if let (region, country) = regionCountry.first(where: { joinedLower.contains($0.key) }) {
+        // Region + country. Most specific (longest) wins: "Châteauneuf-du-Pape" over "Rhône".
+        let regions = regionCountry.keys.sorted { $0.count != $1.count ? $0.count > $1.count : $0 < $1 }
+        if let region = regions.first(where: { matches(phrase: $0, in: words) }) {
             result.region = titleCased(region)
-            result.country = country
+            result.country = regionCountry[region] ?? ""
         }
 
-        // Sparkling / rosé hints override the varietal-derived type.
-        if joinedLower.contains("champagne") || joinedLower.contains("brut")
-            || joinedLower.contains("prosecco") || joinedLower.contains("spumante")
-            || joinedLower.contains("cava") || joinedLower.contains("sparkling") {
+        // Sparkling / rosé hints override the varietal-derived type (whole words only).
+        let sparkling: Set<String> = ["champagne", "brut", "prosecco", "spumante", "cava",
+                                      "sparkling", "cremant", "sekt", "franciacorta"]
+        let rose: Set<String> = ["rose", "rosado", "rosato"]
+        if !wordSet.isDisjoint(with: sparkling) {
             result.type = .sparkling
-        } else if joinedLower.contains("rosé") || joinedLower.contains("rose ")
-            || joinedLower.contains(" rosato") {
+        } else if !wordSet.isDisjoint(with: rose) {
             result.type = .rose
         }
 
-        // Producer / name: the two longest all-caps-ish lines that aren't the
-        // vintage or an obvious volume/ABV line are the best candidates for the
-        // brand and cuvée. First becomes producer, second becomes name.
-        let nameCandidates = cleaned.filter { line in
-            let l = line.lowercased()
-            let isYear = Int(line) != nil && line.count == 4
-            let isMeta = l.contains("ml") || l.contains("alc") || l.contains("vol")
-                || l.contains("%") || l.contains("750") || l.contains("product of")
-            return !isYear && !isMeta && line.count >= 3
+        // Producer / name: the most prominent lines that aren't the vintage,
+        // boilerplate, or just the grape/region we already found. Labels print the
+        // producer and cuvée largest, so rank by size; unknown sizes keep reading order.
+        let candidates = cleaned.filter { line in
+            let lower = line.text.lowercased()
+            let lineWords = normalizedWords(line.text)
+            let isNumeric = line.text.filter(\.isLetter).count < 2
+            let isMeta = metaMarkers.contains { lower.contains($0) }
+            let isFieldOnly = [result.varietal, result.region].contains { field in
+                !field.isEmpty && normalizedWords(field).count == lineWords.count
+                    && matches(phrase: field, in: lineWords)
+            }
+            return !isNumeric && !isMeta && !isFieldOnly && line.text.count >= 3
         }
-        if let first = nameCandidates.first { result.producer = first }
-        if nameCandidates.count > 1 { result.name = nameCandidates[1] }
+        let ranked = candidates.enumerated()
+            .sorted { $0.element.height != $1.element.height
+                ? $0.element.height > $1.element.height : $0.offset < $1.offset }
+            .map(\.element.text)
+        if let first = ranked.first { result.producer = first }
+        if ranked.count > 1 { result.name = ranked[1] }
 
         return result
+    }
+
+    /// Combines a still-photo read with what the live scanner saw. Photo lines
+    /// come first (sharper, reliable sizes); live lines are added only when the
+    /// photo missed them — e.g. text around the curve of the bottle — with size
+    /// unknown so they never outrank the photo. No photo text → live lines as-is.
+    static func mergeLines(photo: [LabelTextLine], live: [LabelTextLine]) -> [LabelTextLine] {
+        guard !photo.isEmpty else { return live }
+        let photoKeys = photo.map { normalizedWords($0.text).joined(separator: " ") }
+        var out = photo
+        for line in live {
+            let key = normalizedWords(line.text).joined(separator: " ")
+            guard !key.isEmpty, !photoKeys.contains(where: { $0.contains(key) }) else { continue }
+            out.append(LabelTextLine(text: line.text, height: 0))
+        }
+        return out
     }
 
     // MARK: - Helpers
 
     static func findVintage(in lines: [String]) -> Int? {
         let currentYear = Calendar.current.component(.year, from: .now)
-        let pattern = try? NSRegularExpression(pattern: "\\b(19\\d{2}|20\\d{2})\\b")
+        // OCR often reads a zero as the letter O ("2O15").
+        let pattern = try? NSRegularExpression(pattern: "\\b(19|2[0Oo])[0-9Oo]{2}\\b")
+        // "Since 1902" / "Est. 1998" is the founding year, not the vintage.
+        let founding: Set<String> = ["since", "est", "established", "founded", "depuis", "dal", "desde", "seit"]
         for line in lines {
             guard let re = pattern else { break }
+            if !founding.isDisjoint(with: normalizedWords(line)) { continue }
             let range = NSRange(line.startIndex..., in: line)
             for m in re.matches(in: line, range: range) {
-                if let r = Range(m.range, in: line), let year = Int(line[r]),
-                   year >= 1900, year <= currentYear + 1 {
+                guard let r = Range(m.range, in: line) else { continue }
+                let digits = line[r].replacingOccurrences(of: "O", with: "0")
+                    .replacingOccurrences(of: "o", with: "0")
+                if let year = Int(digits), year >= 1900, year <= currentYear + 1 {
                     return year
                 }
             }
         }
         return nil
+    }
+
+    /// Accent-folded, lowercased words (letters and digits only).
+    static func normalizedWords(_ s: String) -> [String] {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US"))
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+    }
+
+    /// True if `phrase` appears in `words`, allowing typical OCR slips: words of
+    /// 6–8 letters may be one edit off, 9+ letters two. Words of 5 letters or
+    /// fewer must match exactly, so "cava" doesn't fire on "casa" or "syrah" on "sarah".
+    static func matches(phrase: String, in words: [String]) -> Bool {
+        let target = normalizedWords(phrase)
+        guard !target.isEmpty, words.count >= target.count else { return false }
+        for start in 0...(words.count - target.count) {
+            var ok = true
+            for (i, t) in target.enumerated() {
+                let w = words[start + i]
+                guard w != t else { continue }
+                let allowed = t.count <= 5 ? 0 : (t.count >= 9 ? 2 : 1)
+                if allowed == 0 || editDistance(w, t, limit: allowed) > allowed { ok = false; break }
+            }
+            if ok { return true }
+        }
+        return false
+    }
+
+    /// Levenshtein distance, bailing out once it exceeds `limit`.
+    static func editDistance(_ a: String, _ b: String, limit: Int) -> Int {
+        let a = Array(a), b = Array(b)
+        if abs(a.count - b.count) > limit { return limit + 1 }
+        if a.isEmpty || b.isEmpty { return max(a.count, b.count) }
+        var prev = Array(0...b.count)
+        for i in 1...a.count {
+            var cur = [i] + Array(repeating: 0, count: b.count)
+            var rowMin = cur[0]
+            for j in 1...b.count {
+                cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+                rowMin = min(rowMin, cur[j])
+            }
+            if rowMin > limit { return limit + 1 }
+            prev = cur
+        }
+        return prev[b.count]
     }
 
     static func wineType(forVarietal v: String) -> WineType {

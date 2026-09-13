@@ -44,27 +44,45 @@ struct ScanSheet: View {
     private var capturePanel: some View {
         VStack(spacing: 8) {
             if !buffer.lines.isEmpty {
-                Text(buffer.lines.prefix(3).joined(separator: " · "))
+                // Largest print first — roughly what will become producer and name.
+                Text(buffer.lines.sorted { $0.height > $1.height }.prefix(3).map(\.text).joined(separator: " · "))
                     .font(.caption).foregroundStyle(.white)
                     .lineLimit(2).padding(.horizontal)
             }
+            Text("Hold the label flat and fill the frame")
+                .font(.caption2).foregroundStyle(.white.opacity(0.8))
             Button {
-                let parsed = LabelParser.parse(lines: buffer.lines)
-                Task {
-                    let image = await buffer.capturePhoto()
-                    onParsed(parsed, image)
-                    dismiss()
-                }
+                Task { await useLabel() }
             } label: {
-                Label("Use this label", systemImage: "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity)
+                Group {
+                    if busy {
+                        ProgressView()
+                    } else {
+                        Label("Use this label", systemImage: "checkmark.circle.fill")
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(buffer.lines.isEmpty)
+            .disabled(buffer.lines.isEmpty || busy)
             .padding()
         }
         .background(.ultraThinMaterial)
+    }
+
+    /// Reads the label from a sharp still photo (more accurate than the live
+    /// preview), topped up with anything the live scanner caught that the photo
+    /// missed.
+    private func useLabel() async {
+        busy = true
+        let image = await buffer.capturePhoto()
+        var photoLines: [LabelTextLine] = []
+        if let image { photoLines = await ImageTextRecognizer.recognizeLines(in: image) }
+        let lines = LabelParser.mergeLines(photo: photoLines, live: buffer.lines)
+        onParsed(LabelParser.parse(textLines: lines), image)
+        busy = false
+        dismiss()
     }
 
     private var unsupportedFallback: some View {
@@ -85,8 +103,8 @@ struct ScanSheet: View {
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    let lines = await ImageTextRecognizer.recognize(in: image)
-                    onParsed(LabelParser.parse(lines: lines), image)
+                    let lines = await ImageTextRecognizer.recognizeLines(in: image)
+                    onParsed(LabelParser.parse(textLines: lines), image)
                 }
                 busy = false
                 dismiss()
