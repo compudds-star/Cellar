@@ -123,7 +123,9 @@ struct CollectionDetailView: View {
     @Query(sort: [SortDescriptor(\Wine.createdAt, order: .reverse)]) private var wines: [Wine]
 
     private var owned: [Wine] { wines.filter { !$0.isWishlist } }
-    private var winesInScope: [Wine] { owned.filter { !$0.inStockBottles(in: scope).isEmpty } }
+    private var winesInScope: [Wine] {
+        owned.filter { !$0.inStockBottles(in: scope).isEmpty }.sorted(by: Wine.alphabeticalOrder)
+    }
 
     var body: some View {
         List {

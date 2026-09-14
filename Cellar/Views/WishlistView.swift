@@ -6,7 +6,7 @@ struct WishlistView: View {
     @Query(sort: [SortDescriptor(\Wine.createdAt, order: .reverse)])
     private var wines: [Wine]
 
-    private var wishlist: [Wine] { wines.filter { $0.isWishlist } }
+    private var wishlist: [Wine] { wines.filter { $0.isWishlist }.sorted(by: Wine.alphabeticalOrder) }
 
     var body: some View {
         NavigationStack {

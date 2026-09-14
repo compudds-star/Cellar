@@ -75,7 +75,8 @@ final class CellarSmokeUITests: XCTestCase {
 
         app.tabBars.buttons["Wishlist"].tap()
         let wishRow = cell(containing: wishProducer)
-        XCTAssertTrue(wishRow.waitForExistence(timeout: 5), "wishlist item missing")
+        if !wishRow.waitForExistence(timeout: 3) { reveal(wishRow) }   // alphabetical: may be off-screen
+        XCTAssertTrue(wishRow.exists, "wishlist item missing")
         snapshot("05-wishlist")
         wishRow.swipeRight()
         app.buttons["Move to cellar"].tap()
