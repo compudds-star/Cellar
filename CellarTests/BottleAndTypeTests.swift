@@ -31,7 +31,7 @@ final class WineTypeTests: XCTestCase {
         let macallan = LabelParser.parse(lines: ["THE MACALLAN", "Sherry Oak 18 Years Old",
                                                  "Highland Single Malt Scotch Whisky", "43% vol"])
         XCTAssertEqual(macallan.type, .whisky)
-        XCTAssertEqual(macallan.producer, "THE MACALLAN")
+        XCTAssertEqual(macallan.producer, "The Macallan")
         XCTAssertEqual(macallan.name, "Sherry Oak 18 Years Old")
         XCTAssertEqual(LabelParser.parse(lines: ["Rémy Martin", "Fine Champagne Cognac", "VSOP"]).type, .brandy)
         XCTAssertEqual(LabelParser.parse(lines: ["Some Distillery", "Reserve", "45% alc/vol"]).type, .spirit)

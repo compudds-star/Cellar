@@ -43,12 +43,7 @@ struct WishlistView: View {
 
     /// Promote a wishlist wine into the cellar: clear the flag and add one bottle.
     private func moveToCellar(_ wine: Wine) {
-        wine.isWishlist = false
-        let bottle = Bottle(size: .defaultSize(for: wine.type))
-        context.insert(bottle)
-        wine.bottles.append(bottle)
-        bottle.collection = CollectionMemory.defaultCollection(in: context)
-        PriceLookup.start(for: wine, context: context)
+        WishlistMove.toCellar(wine, context: context)
     }
 
     private func delete(at offsets: IndexSet) {

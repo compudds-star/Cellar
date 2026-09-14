@@ -79,6 +79,7 @@ struct WineEditorView: View {
     let wine: Wine
     @State private var draft: WineDraft
     @State private var showingLWIN = false
+    @State private var confirmingWishlist = false
 
     init(wine: Wine) {
         self.wine = wine
@@ -157,6 +158,30 @@ struct WineEditorView: View {
                     TextField("Notes", text: $draft.notes, axis: .vertical)
                         .lineLimit(2...6)
                 }
+
+                if !wine.isWishlist {
+                    Section {
+                        Button {
+                            confirmingWishlist = true
+                        } label: {
+                            Label("Move to Wishlist", systemImage: "star")
+                        }
+                        .disabled(!draft.canSave)
+                    } footer: {
+                        Text("Keeps every detail, photo, price, and bottle. It stops counting toward your cellar value until you move it back.")
+                    }
+                }
+            }
+            .confirmationDialog("Move to Wishlist?", isPresented: $confirmingWishlist, titleVisibility: .visible) {
+                Button("Move to Wishlist") {
+                    applyEdits()
+                    WishlistMove.toWishlist(wine)
+                    dismiss()
+                }
+            } message: {
+                Text(wine.inStockCount == 0
+                     ? "Your edits are saved too."
+                     : "Its \(wine.inStockCount) bottle\(wine.inStockCount == 1 ? "" : "s") in stock stay with it. Your edits are saved too.")
             }
             .navigationTitle("Edit wine")
             .navigationBarTitleDisplayMode(.inline)
@@ -180,12 +205,16 @@ struct WineEditorView: View {
     }
 
     private func save() {
+        applyEdits()
+        dismiss()
+    }
+
+    private func applyEdits() {
         let identityChanged = draft.apply(to: wine)
         // A different wine needs its own price, even if the old one was fetched recently.
         if identityChanged { PriceLookup.start(for: wine, context: context, force: true) }
         // Drink-window reminders include the wine's name.
         Task { DrinkWindowNotifier.schedule(for: wine) }
-        dismiss()
     }
 }
 

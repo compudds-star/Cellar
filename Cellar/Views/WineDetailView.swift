@@ -118,12 +118,7 @@ struct WineDetailView: View {
             if wine.isWishlist {
                 Section {
                     Button {
-                        wine.isWishlist = false
-                        let bottle = Bottle(size: .defaultSize(for: wine.type))
-                        context.insert(bottle)
-                        wine.bottles.append(bottle)
-                        bottle.collection = CollectionMemory.defaultCollection(in: context)
-                        PriceLookup.start(for: wine, context: context)
+                        WishlistMove.toCellar(wine, context: context)
                     } label: {
                         Label("Move to cellar", systemImage: "tray.and.arrow.down")
                     }

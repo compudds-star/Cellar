@@ -41,6 +41,11 @@ xcodebuild -project Cellar.xcodeproj -scheme Cellar \
   `excludes:`) so they aren't double-copied into the bundle ("Multiple commands
   produce Info.plist").
 - iPhone-only: `TARGETED_DEVICE_FAMILY: "1"` lives at the target level.
+- The share extension follows the same pattern (`CellarShare/Info.plist`,
+  `CellarShare.entitlements`). App and extension share App Group
+  `group.com.compudds.cellar` — it must be enabled for the team (automatic signing in
+  Xcode registers it). The extension never opens the SwiftData store (and can't load
+  LWIN within its memory limit); the app does the import.
 - On-device only: SwiftData store + `NSFileProtectionComplete`. No analytics, no
   third-party SDKs. Nothing leaves the phone except an export the user initiates
   or the wine identity sent to price it.
@@ -87,6 +92,11 @@ Cellar/                      app source (Swift)
                             CollectionsView (manage) / CollectionDetailView / CollectionPicker /
                             MoveToCollectionMenu (Cellar list Select mode) / MoveBottlesSheet,
                             WineEditorView (edit a saved wine; WineDraft = pure form model)
+CellarShare/                share extension ("Cellar" in the share sheet): reads a page/link/message/
+                            photo, you confirm, it writes a PendingImport to the App Group folder
+Cellar/Shared/              compiled into app AND extension: WineType, PendingImport + SharedImportStore,
+                            SharedWineParser (titles, Vivino messages, links); LabelParser is shared too
+Cellar/Import/              PendingImporter: app imports pending shares when it comes to the front
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv

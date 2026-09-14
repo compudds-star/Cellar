@@ -152,9 +152,11 @@ final class CellarSmokeUITests: XCTestCase {
         app.tabBars.buttons["Value"].tap()
         let homeRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", home, "$200.00")).firstMatch
         let beachRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", beach, "$100.00")).firstMatch
+        // Collections are alphabetical: Beach rows come before Home rows.
+        reveal(beachRow)
+        XCTAssertTrue(beachRow.waitForExistence(timeout: 5), "Beach total should be $100.00")
         reveal(homeRow)
         XCTAssertTrue(homeRow.waitForExistence(timeout: 5), "Home total should be $200.00")
-        XCTAssertTrue(beachRow.exists, "Beach total should be $100.00")
         snapshot("14-collection-totals")
         homeRow.tap()
         XCTAssertTrue(app.navigationBars[home].waitForExistence(timeout: 5), "collection breakdown didn't open")
@@ -171,7 +173,16 @@ final class CellarSmokeUITests: XCTestCase {
         reveal(picker)
         picker.tap()
         let item = app.buttons[option].firstMatch
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "\(pickerLabel) option \(option) missing")
+        // Long menus scroll, and off-screen items aren't in the tree until scrolled to
+        // (the simulator collects many test collections over runs).
+        var scrolls = 0
+        while !item.waitForExistence(timeout: scrolls == 0 ? 3 : 1), scrolls < 10 {
+            let visibleItem = app.buttons.matching(NSPredicate(format: "label != ''")).element(boundBy: 0)
+            let menu = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : visibleItem
+            menu.swipeUp(velocity: .slow)
+            scrolls += 1
+        }
+        XCTAssertTrue(item.exists, "\(pickerLabel) option \(option) missing")
         item.tap()
     }
 
@@ -251,6 +262,139 @@ final class CellarSmokeUITests: XCTestCase {
         let twoBottles = cabinRow(bottles: "2 bottles")
         reveal(twoBottles)
         XCTAssertTrue(twoBottles.waitForExistence(timeout: 5), "cabin should hold 2 bottles after moving one out")
+    }
+
+    /// Move a cellar wine to the Wishlist from Edit, then back: bottles and price paid survive.
+    func testMoveWineToWishlistAndBack() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let producer = "Roundtrip \(stamp)"
+
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        type(producer, into: app.textFields["Producer"])
+        type("90", into: app.textFields["0.00"].firstMatch)
+        let stepper = app.steppers.firstMatch
+        reveal(stepper)
+        stepper.buttons["Increment"].tap()
+        type("40", into: app.textFields.matching(identifier: "0.00").element(boundBy: 1))
+        app.navigationBars["Add wine"].buttons["Save"].tap()
+
+        searchCellar(for: producer).tap()
+        app.navigationBars.buttons["Edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForExistence(timeout: 5), "editor didn't open")
+        tap(app.buttons["Move to Wishlist"])
+        let confirm = app.sheets.buttons["Move to Wishlist"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "confirmation missing")
+        confirm.tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForNonExistence(timeout: 5))
+        if app.navigationBars.buttons["Cellar"].exists { app.navigationBars.buttons["Cellar"].tap() }
+        clearCellarSearch()
+
+        app.tabBars.buttons["Wishlist"].tap()
+        let wishRow = cell(containing: producer)
+        if !wishRow.waitForExistence(timeout: 3) { reveal(wishRow) }
+        XCTAssertTrue(wishRow.exists, "wine not on the Wishlist")
+        snapshot("21-moved-to-wishlist")
+        wishRow.swipeRight()
+        app.buttons["Move to cellar"].tap()
+        XCTAssertTrue(wishRow.waitForNonExistence(timeout: 5))
+
+        app.tabBars.buttons["Cellar"].tap()
+        searchCellar(for: producer).tap()
+        let header = app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", "Bottles (2 in stock)")).firstMatch
+        reveal(header)
+        XCTAssertTrue(header.exists, "bottles should come back without a duplicate")
+        XCTAssertTrue(app.descendants(matching: .any)
+                        .matching(NSPredicate(format: "label CONTAINS %@", "Paid $40.00")).firstMatch.exists,
+                      "price paid lost")
+    }
+
+    /// Share a page from Safari to the Wishlist through the share extension.
+    func testShareFromSafariAddsToWishlist() throws {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let extra = "Shared \(stamp)"
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        safari.launch()
+
+        let addressCandidates = [safari.textFields["Address"], safari.buttons["Address"],
+                                 safari.textFields["TabBarItemTitle"], safari.buttons["TabBarItemTitle"],
+                                 safari.otherElements["TabBarItemTitle"]]
+        guard let address = addressCandidates.first(where: { $0.waitForExistence(timeout: 3) }) else {
+            XCTFail("Safari address bar not found")
+            return
+        }
+        address.tap()
+        safari.typeText("https://example.com\n")
+        guard safari.staticTexts["Example Domain"].waitForExistence(timeout: 30) else {
+            throw XCTSkip("Safari couldn't load example.com (offline?)")
+        }
+
+        let shareCandidates = [safari.buttons["ShareButton"], safari.buttons["Share"]]
+        guard let share = shareCandidates.first(where: { $0.waitForExistence(timeout: 3) }) else {
+            XCTFail("Safari share button not found")
+            return
+        }
+        share.tap()
+        let cellarActivity = safari.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == 'Cellar' AND (elementType == %d OR elementType == %d)",
+                                  XCUIElement.ElementType.cell.rawValue, XCUIElement.ElementType.button.rawValue))
+            .firstMatch
+        XCTAssertTrue(cellarActivity.waitForExistence(timeout: 10), "Cellar isn't in the share sheet")
+        snapshot("22-share-sheet", of: safari)
+        cellarActivity.tap()
+
+        let sheetBar = safari.navigationBars["Add to Cellar"]
+        XCTAssertTrue(sheetBar.waitForExistence(timeout: 15), "share extension didn't open")
+        let nameField = safari.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Cuv'")).firstMatch
+        XCTAssertTrue(nameField.waitForExistence(timeout: 20), "extension form didn't load")
+        nameField.tap()
+        nameField.typeText(extra)
+        snapshot("23-share-extension", of: safari)
+        let save = sheetBar.buttons["Save"]
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: save)
+        waitForExpectations(timeout: 15)
+        save.tap()
+        XCTAssertTrue(sheetBar.waitForNonExistence(timeout: 10))
+
+        app.activate()
+        let added = app.alerts["Added from another app"]
+        XCTAssertTrue(added.waitForExistence(timeout: 15), "app didn't import the shared wine")
+        added.buttons["OK"].tap()
+        app.tabBars.buttons["Wishlist"].tap()
+        let row = cell(containing: extra)
+        if !row.waitForExistence(timeout: 3) { reveal(row) }
+        XCTAssertTrue(row.exists, "shared wine not on the Wishlist")
+    }
+
+    /// Tapping inside existing text in Edit wine puts the cursor there, not at the end.
+    /// Taps two letters into the producer, types a marker, and checks where it landed.
+    func testTapPlacesCursorInText() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let producer = "Cursor \(stamp)"
+
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Add"].tap()
+        type(producer, into: app.textFields["Producer"])
+        app.navigationBars["Add wine"].buttons["Save"].tap()
+
+        searchCellar(for: producer).tap()
+        app.navigationBars.buttons["Edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForExistence(timeout: 5), "editor didn't open")
+
+        let field = app.textFields["Producer"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        // About two characters in from the start of the text ("Cu|rsor …").
+        field.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 20, dy: field.frame.height / 2))
+            .tap()
+        field.typeText("#")
+        let value = field.value as? String ?? ""
+        snapshot("24-cursor-tap")
+        XCTAssertTrue(value.contains("#"), "marker wasn't typed: \(value)")
+        // iOS snaps a first tap to the nearest word edge, so "#Cursor …" is correct here.
+        XCTAssertFalse(value.hasSuffix("#"), "cursor jumped to the end instead of the tap: \(value)")
+
+        app.navigationBars["Edit wine"].buttons["Cancel"].tap()
     }
 
     /// Settings defaults for new bottles: wine and spirit sizes drive the Add form.
@@ -452,14 +596,26 @@ final class CellarSmokeUITests: XCTestCase {
     private func reveal(_ element: XCUIElement) {
         dismissKeyboard()
         var swipes = 0
-        while !(element.exists && element.isHittable) && swipes < 12 {
-            if element.exists && element.frame.minY < app.frame.midY {
-                app.swipeDown(velocity: .slow)
+        while !isComfortablyVisible(element) && swipes < 20 {
+            if element.exists {
+                if element.frame.minY < app.frame.midY { app.swipeDown(velocity: .slow) } else { app.swipeUp(velocity: .slow) }
             } else {
-                app.swipeUp(velocity: .slow)
+                // Off-screen rows aren't in the tree: look further down first, then back up.
+                if swipes < 8 { app.swipeUp(velocity: .slow) } else { app.swipeDown(velocity: .slow) }
             }
             swipes += 1
         }
+    }
+
+    /// On screen with room to tap: below the navigation bar, above the bottom edge and
+    /// tab bar, and not under the keyboard. (`isHittable` alone accepts elements sitting
+    /// on the very bottom edge, where a tap misses.)
+    private func isComfortablyVisible(_ element: XCUIElement) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        var bottom = app.frame.maxY - 90
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists { bottom = min(bottom, keyboard.frame.minY) }
+        return element.frame.maxY <= bottom && element.frame.minY >= app.frame.minY + 100
     }
 
     private func dismissKeyboard() {
@@ -482,8 +638,8 @@ final class CellarSmokeUITests: XCTestCase {
         element.typeText(text)
     }
 
-    private func snapshot(_ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+    private func snapshot(_ name: String, of target: XCUIApplication? = nil) {
+        let shot = XCTAttachment(screenshot: (target ?? app).screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)

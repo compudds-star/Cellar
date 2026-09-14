@@ -189,4 +189,60 @@ final class CollectionTests: XCTestCase {
                                "Château Margaux Grand Vin 2015",
                                "opus one 2018"])
     }
+
+    @MainActor
+    func testWishlistMoveKeepsBottlesAndDetails() {
+        let home = CellarCollection(name: "Home")
+        ctx.insert(home)
+        let wine = Wine(name: "Roundtrip", producer: "Test", notes: "Keep me", manualEstimatedValue: 90, rating: 4)
+        ctx.insert(wine)
+        let paid = Bottle(purchasePrice: 40)
+        let second = Bottle()
+        for bottle in [paid, second] {
+            ctx.insert(bottle)
+            wine.bottles.append(bottle)
+        }
+        paid.collection = home
+
+        WishlistMove.toWishlist(wine)
+        XCTAssertTrue(wine.isWishlist)
+        XCTAssertEqual(wine.bottles.count, 2)
+        XCTAssertEqual(wine.notes, "Keep me")
+        XCTAssertEqual(wine.rating, 4)
+        XCTAssertEqual(paid.collection?.id, home.id)
+
+        WishlistMove.toCellar(wine, context: ctx)
+        XCTAssertFalse(wine.isWishlist)
+        XCTAssertEqual(wine.bottles.count, 2)            // bottles come back, no duplicate
+        XCTAssertEqual(wine.bottles.compactMap(\.purchasePrice), [40])
+
+        // A wishlist wine with nothing in stock gets one bottle.
+        let wanted = Wine(name: "Wanted", isWishlist: true)
+        ctx.insert(wanted)
+        WishlistMove.toCellar(wanted, context: ctx)
+        XCTAssertEqual(wanted.inStockCount, 1)
+    }
+
+    func testTitleCasesExistingAllCapsNamesOnce() throws {
+        let suite = "cleanup-test-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let caps = Wine(name: "SHERRY OAK 18", producer: "THE MACALLAN")
+        let mixed = Wine(name: "The Dead Arm", producer: "d'Arenberg")
+        ctx.insert(caps)
+        ctx.insert(mixed)
+        try ctx.save()
+
+        XCTAssertEqual(DataCleanup.titleCaseAllCapsNames(in: ctx, defaults: defaults), 1)
+        XCTAssertEqual(caps.producer, "The Macallan")
+        XCTAssertEqual(caps.name, "Sherry Oak 18")
+        XCTAssertEqual(mixed.producer, "d'Arenberg")
+        XCTAssertEqual(mixed.name, "The Dead Arm")
+
+        // Runs once: capitals typed later are left alone.
+        caps.producer = "LVMH"
+        XCTAssertEqual(DataCleanup.titleCaseAllCapsNames(in: ctx, defaults: defaults), 0)
+        XCTAssertEqual(caps.producer, "LVMH")
+    }
 }

@@ -46,10 +46,24 @@ extension LabelParserTests {
             LabelTextLine(text: "2018", height: 0.05),
             LabelTextLine(text: "Red Wine", height: 0.025),
         ])
-        XCTAssertEqual(parsed.producer, "OPUS ONE")
+        XCTAssertEqual(parsed.producer, "Opus One")      // all-caps print is title-cased
         XCTAssertEqual(parsed.name, "Robert Mondavi & Baron Philippe de Rothschild")
         XCTAssertEqual(parsed.region, "Napa Valley")
         XCTAssertEqual(parsed.vintage, 2018)
+    }
+
+    func testAllCapsBecomeTitleCase() {
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("CHÂTEAU D'YQUEM"), "Château D'Yquem")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("DOW'S VINTAGE PORT"), "Dow's Vintage Port")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("HENNESSY XO"), "Hennessy XO")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("SAINT-ÉMILION GRAND CRU"), "Saint-Émilion Grand Cru")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("MOËT & CHANDON"), "Moët & Chandon")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("McLaren Vale"), "McLaren Vale")
+        XCTAssertEqual(LabelParser.titleCasedIfAllCaps("d'Arenberg"), "d'Arenberg")
+        let parsed = LabelParser.parse(textLines: [LabelTextLine(text: "OPUS ONE", height: 0.1),
+                                                   LabelTextLine(text: "OVERTURE", height: 0.05)])
+        XCTAssertEqual(parsed.producer, "Opus One")
+        XCTAssertEqual(parsed.name, "Overture")
     }
 
     func testOCRTyposStillMatchGrapeAndRegion() {

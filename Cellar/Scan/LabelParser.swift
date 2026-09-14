@@ -134,8 +134,8 @@ enum LabelParser {
             .sorted { $0.element.height != $1.element.height
                 ? $0.element.height > $1.element.height : $0.offset < $1.offset }
             .map(\.element.text)
-        if let first = ranked.first { result.producer = first }
-        if ranked.count > 1 { result.name = ranked[1] }
+        if let first = ranked.first { result.producer = titleCasedIfAllCaps(first) }
+        if ranked.count > 1 { result.name = titleCasedIfAllCaps(ranked[1]) }
 
         return result
     }
@@ -157,6 +157,47 @@ enum LabelParser {
     }
 
     // MARK: - Helpers
+
+    /// Acronyms and numerals that stay uppercase when an all-caps line is title-cased.
+    static let keepUppercase: Set<String> = ["XO", "XXO", "VS", "VSOP", "AOC", "AOP", "DOC", "DOCG",
+                                             "IGT", "IGP", "AVA", "NV", "II", "III", "IV", "VI", "VII",
+                                             "VIII", "IX", "USA", "UK"]
+
+    /// Labels are often printed in capitals: "OPUS ONE" → "Opus One". Only text with no
+    /// lowercase letters changes, so "McLaren Vale" and "d'Arenberg" stay as printed.
+    static func titleCasedIfAllCaps(_ s: String) -> String {
+        let letters = s.filter(\.isLetter)
+        guard letters.count >= 2, !letters.contains(where: \.isLowercase) else { return s }
+        return s.split(separator: " ", omittingEmptySubsequences: false).map { word -> String in
+            let text = String(word)
+            if keepUppercase.contains(text.trimmingCharacters(in: .punctuationCharacters)) { return text }
+            return text.split(separator: "-", omittingEmptySubsequences: false)
+                .map { capitalizingFirstLetter(String($0)) }
+                .joined(separator: "-")
+        }.joined(separator: " ")
+    }
+
+    /// First letter up, the rest down; an elided article starts a new word ("D'YQUEM" →
+    /// "D'Yquem") but a possessive doesn't ("DOW'S" → "Dow's").
+    private static func capitalizingFirstLetter(_ word: String) -> String {
+        var out = ""
+        var capitalizeNext = true
+        var lettersInPart = 0
+        for ch in word {
+            if ch.isLetter {
+                out += capitalizeNext ? ch.uppercased() : ch.lowercased()
+                capitalizeNext = false
+                lettersInPart += 1
+            } else {
+                out.append(ch)
+                if (ch == "'" || ch == "\u{2019}"), lettersInPart == 1 {
+                    capitalizeNext = true
+                    lettersInPart = 0
+                }
+            }
+        }
+        return out
+    }
 
     static func findVintage(in lines: [String]) -> Int? {
         let currentYear = Calendar.current.component(.year, from: .now)
