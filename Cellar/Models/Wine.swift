@@ -230,11 +230,16 @@ final class Wine {
         }
     }
 
-    var displayTitle: String {
-        let v = vintage.map { String($0) } ?? "NV"
+    /// Producer and cuvée: the first line of a list row.
+    var nameLine: String {
         let head = [producer, name].filter { !$0.isEmpty }.joined(separator: " ")
-        return head.isEmpty ? "\(v) Unknown wine" : "\(v) \(head)"
+        return head.isEmpty ? "Unknown wine" : head
     }
+
+    /// "2015", or "NV" for non-vintage.
+    var vintageLabel: String { vintage.map { String($0) } ?? "NV" }
+
+    var displayTitle: String { "\(vintageLabel) \(nameLine)" }
 
     /// Full 11-digit LWIN (wine + vintage), when the wine has a matched identity.
     var lwin11: String? {

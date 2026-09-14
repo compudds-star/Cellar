@@ -464,7 +464,8 @@ final class CellarSmokeUITests: XCTestCase {
         clearCellarSearch()
         searchCellar(for: stamp)
         XCTAssertTrue(cell(containing: edited).exists, "edited name not listed")
-        XCTAssertFalse(cell(containing: "2015 \(producer)").exists, "old name still listed")
+        // Rows read "<producer and cuvée>, <vintage>, …": the old producer must be gone.
+        XCTAssertFalse(cell(containing: "\(producer),").exists, "old name still listed")
         clearCellarSearch()
     }
 
