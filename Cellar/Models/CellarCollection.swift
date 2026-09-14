@@ -117,3 +117,25 @@ enum CollectionMemory {
         return try? context.fetch(descriptor).first
     }
 }
+
+/// Moves bottles between collections in bulk. Only the bottles passed (or the
+/// wines' in-stock bottles within a scope) move; consumed, gifted, and sold bottles
+/// keep their history.
+enum CollectionMover {
+    /// Moves each wine's in-stock bottles that fall within `scope`. Returns how many changed.
+    @discardableResult
+    static func move(bottlesOf wines: [Wine], in scope: CollectionScope, to collection: CellarCollection?) -> Int {
+        move(wines.flatMap { $0.inStockBottles(in: scope) }, to: collection)
+    }
+
+    /// Moves specific bottles. Bottles already in `collection` don't count.
+    @discardableResult
+    static func move(_ bottles: [Bottle], to collection: CellarCollection?) -> Int {
+        var moved = 0
+        for bottle in bottles where bottle.collection?.id != collection?.id {
+            bottle.collection = collection
+            moved += 1
+        }
+        return moved
+    }
+}

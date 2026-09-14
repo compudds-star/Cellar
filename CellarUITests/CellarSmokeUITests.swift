@@ -186,6 +186,66 @@ final class CellarSmokeUITests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Bulk moves: select wines in the Cellar list and move their bottles, then move
+    /// one bottle out from the wine's page.
+    func testMoveBottlesToCollection() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let wineA = "MoveA \(stamp)", wineB = "MoveB \(stamp)", cabin = "Cabin \(stamp)"
+
+        func addWine(_ producer: String, bottles: Int) {
+            app.tabBars.buttons["Cellar"].tap()
+            app.navigationBars["Cellar"].buttons["Add"].tap()
+            type(producer, into: app.textFields["Producer"])
+            type("50", into: app.textFields["0.00"].firstMatch)
+            let stepper = app.steppers.firstMatch
+            reveal(stepper)
+            for _ in 1..<bottles { stepper.buttons["Increment"].tap() }
+            choose("None", in: "Collection")
+            app.navigationBars["Add wine"].buttons["Save"].tap()
+            XCTAssertTrue(cell(containing: producer).waitForExistence(timeout: 5), "\(producer) not added")
+        }
+        func cabinRow(bottles: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", cabin, bottles)).firstMatch
+        }
+
+        addWine(wineA, bottles: 2)
+        addWine(wineB, bottles: 1)
+
+        app.navigationBars["Cellar"].buttons["Select"].tap()
+        cell(containing: wineA).tap()
+        cell(containing: wineB).tap()
+        let moveMenu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Move to'")).firstMatch
+        XCTAssertTrue(moveMenu.waitForExistence(timeout: 5), "Move to menu missing")
+        snapshot("19-select-wines")
+        moveMenu.tap()
+        app.buttons["New collection…"].tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(cabin)
+        app.alerts.buttons["Create & move"].tap()
+
+        app.tabBars.buttons["Value"].tap()
+        let threeBottles = cabinRow(bottles: "3 bottles")
+        reveal(threeBottles)
+        XCTAssertTrue(threeBottles.waitForExistence(timeout: 5), "cabin should hold 3 bottles")
+        XCTAssertTrue(threeBottles.label.contains("$150.00"), threeBottles.label)
+
+        app.tabBars.buttons["Cellar"].tap()
+        cell(containing: wineA).tap()
+        tap(app.buttons["Move bottles…"])
+        XCTAssertTrue(app.navigationBars["Move bottles"].waitForExistence(timeout: 5), "move sheet didn't open")
+        app.buttons.matching(identifier: "moveBottleRow").firstMatch.tap()
+        choose("None", in: "Collection")
+        snapshot("20-move-bottles")
+        app.navigationBars["Move bottles"].buttons["Move"].tap()
+
+        app.tabBars.buttons["Value"].tap()
+        let twoBottles = cabinRow(bottles: "2 bottles")
+        reveal(twoBottles)
+        XCTAssertTrue(twoBottles.waitForExistence(timeout: 5), "cabin should hold 2 bottles after moving one out")
+    }
+
     /// Settings defaults for new bottles: wine and spirit sizes drive the Add form.
     func testSettingsBottleSizeDefaults() {
         func setSizes(wine: String, spirits: String) {

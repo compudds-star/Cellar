@@ -142,3 +142,124 @@ struct CollectionDetailView: View {
         .navigationTitle(scope.title)
     }
 }
+
+/// "Move to…" menu: pick a collection, no collection, or name a new one.
+struct MoveToCollectionMenu: View {
+    /// Bottles that would move; the menu is disabled at zero.
+    let bottleCount: Int
+    let onMove: (CellarCollection?) -> Void
+
+    @Environment(\.modelContext) private var context
+    @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
+    @State private var naming = false
+    @State private var newName = ""
+
+    var body: some View {
+        Menu {
+            ForEach(collections) { collection in
+                Button(collection.name) { onMove(collection) }
+            }
+            Button {
+                onMove(nil)
+            } label: {
+                Label("No collection", systemImage: "tray")
+            }
+            Divider()
+            Button {
+                newName = ""
+                naming = true
+            } label: {
+                Label("New collection…", systemImage: "plus")
+            }
+        } label: {
+            Text("Move to…")
+        }
+        .disabled(bottleCount == 0)
+        .alert("New collection", isPresented: $naming) {
+            TextField("Name (e.g. Beach house)", text: $newName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create & move") {
+                if let created = CollectionStore.create(named: newName, in: context) { onMove(created) }
+            }
+        }
+    }
+}
+
+/// Pick some of a wine's in-stock bottles and move them to one collection.
+struct MoveBottlesSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    let wine: Wine
+    @State private var selected = Set<UUID>()
+    @State private var destination: CellarCollection?
+
+    private var bottles: [Bottle] { wine.inStockBottles.sorted { $0.addedAt < $1.addedAt } }
+    private var allSelected: Bool { !bottles.isEmpty && selected.count == bottles.count }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(bottles) { bottle in
+                        let isSelected = selected.contains(bottle.id)
+                        Button {
+                            if isSelected { selected.remove(bottle.id) } else { selected.insert(bottle.id) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(bottle.size.label)
+                                    Text(caption(for: bottle)).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("moveBottleRow")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
+                } header: {
+                    HStack {
+                        Text("\(selected.count) of \(bottles.count) selected")
+                        Spacer()
+                        Button(allSelected ? "Select none" : "Select all") {
+                            selected = allSelected ? [] : Set(bottles.map(\.id))
+                        }
+                        .font(.caption)
+                        .textCase(nil)
+                    }
+                }
+
+                Section("Move to") {
+                    CollectionPicker(selection: $destination)
+                }
+            }
+            .navigationTitle("Move bottles")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear { destination = CollectionMemory.defaultCollection(in: context) }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Move") {
+                        CollectionMover.move(bottles.filter { selected.contains($0.id) }, to: destination)
+                        dismiss()
+                    }
+                    .disabled(selected.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func caption(for bottle: Bottle) -> String {
+        var parts = [bottle.collection?.name ?? "No collection"]
+        if !bottle.storageLocation.isEmpty { parts.append(bottle.storageLocation) }
+        if let paid = bottle.purchasePrice { parts.append("Paid \(Money.string(paid))") }
+        return parts.joined(separator: " · ")
+    }
+}

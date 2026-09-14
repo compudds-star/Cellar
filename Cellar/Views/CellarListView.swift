@@ -11,6 +11,8 @@ struct CellarListView: View {
     @State private var searchText = ""
     @State private var typeFilter: WineType?
     @State private var scope: CollectionScope = .all
+    @State private var editMode: EditMode = .inactive
+    @State private var selection = Set<UUID>()
     @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
 
     private var filtered: [Wine] {
@@ -24,6 +26,12 @@ struct CellarListView: View {
                 || wine.region.localizedCaseInsensitiveContains(searchText)
             return matchesType && matchesScope && matchesSearch
         }
+    }
+
+    private var selectedWines: [Wine] { filtered.filter { selection.contains($0.id) } }
+    /// In-stock bottles of the selected wines that a move would take (within the collection filter).
+    private var selectedBottleCount: Int {
+        selectedWines.reduce(0) { $0 + $1.inStockBottles(in: scope).count }
     }
 
     private var cellarTotal: Decimal {
@@ -43,7 +51,7 @@ struct CellarListView: View {
                             .buttonStyle(.borderedProminent)
                     }
                 } else {
-                    List {
+                    List(selection: $selection) {
                         Section {
                             ForEach(filtered) { wine in
                                 NavigationLink(value: wine) {
@@ -62,6 +70,7 @@ struct CellarListView: View {
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
             .navigationTitle(scope == .all ? "Cellar" : scope.title)
             .onChange(of: collections) { _, current in
                 // A deleted collection can't stay selected.
@@ -101,8 +110,32 @@ struct CellarListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if wines.contains(where: { !$0.isWishlist }) {
+                        Button(editMode.isEditing ? "Done" : "Select") {
+                            withAnimation {
+                                editMode = editMode.isEditing ? .inactive : .active
+                                selection.removeAll()
+                            }
+                        }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
+                    }
+                }
+                if editMode.isEditing {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Text("\(selection.count) wine\(selection.count == 1 ? "" : "s") · \(selectedBottleCount) bottle\(selectedBottleCount == 1 ? "" : "s")")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Spacer()
+                        MoveToCollectionMenu(bottleCount: selectedBottleCount) { destination in
+                            CollectionMover.move(bottlesOf: selectedWines, in: scope, to: destination)
+                            withAnimation {
+                                selection.removeAll()
+                                editMode = .inactive
+                            }
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

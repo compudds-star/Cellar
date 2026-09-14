@@ -15,6 +15,7 @@ struct WineDetailView: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var editingPhoto = false
     @State private var editingWine = false
+    @State private var movingBottles = false
 
     var body: some View {
         List {
@@ -155,6 +156,14 @@ struct WineDetailView: View {
                 } label: {
                     Label("Add a bottle", systemImage: "plus")
                 }
+                if wine.inStockCount > 0 {
+                    Button {
+                        endEditing()
+                        movingBottles = true
+                    } label: {
+                        Label("Move bottles…", systemImage: "archivebox")
+                    }
+                }
             }
 
             Section {
@@ -181,6 +190,9 @@ struct WineDetailView: View {
         }
         .sheet(isPresented: $editingWine) {
             WineEditorView(wine: wine)
+        }
+        .sheet(isPresented: $movingBottles) {
+            MoveBottlesSheet(wine: wine)
         }
         // Scrolling puts the keyboard away, so a focused tasting note doesn't pin the
         // page (focus returns to it when the bottle editor closes).

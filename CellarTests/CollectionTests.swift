@@ -107,4 +107,32 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(CollectionDefault(storage: "none"), .noCollection)
         XCTAssertEqual(CollectionDefault(storage: "garbage"), .lastUsed)
     }
+
+    func testMovingBottlesWithinAScope() {
+        let home = CellarCollection(name: "Home"), cabin = CellarCollection(name: "Cabin")
+        ctx.insert(home)
+        ctx.insert(cabin)
+        let wine = Wine(name: "Mover", manualEstimatedValue: 10)
+        ctx.insert(wine)
+        addBottles(wine, count: 2, to: nil)
+        addBottles(wine, count: 1, to: home)
+        let drunk = Bottle(status: .consumed)
+        ctx.insert(drunk)
+        wine.bottles.append(drunk)
+
+        // Only the unassigned, in-stock bottles move.
+        XCTAssertEqual(CollectionMover.move(bottlesOf: [wine], in: .unassigned, to: cabin), 2)
+        XCTAssertEqual(CellarStats(wines: [wine], scope: .collection(cabin)).bottleCount, 2)
+        XCTAssertEqual(CellarStats(wines: [wine], scope: .collection(home)).bottleCount, 1)
+        XCTAssertNil(drunk.collection)
+
+        // Everything back to no collection.
+        XCTAssertEqual(CollectionMover.move(bottlesOf: [wine], in: .all, to: nil), 3)
+        XCTAssertEqual(CellarStats(wines: [wine], scope: .unassigned).bottleCount, 3)
+
+        // Specific bottles; ones already there don't count.
+        let one = wine.inStockBottles[0]
+        XCTAssertEqual(CollectionMover.move([one], to: home), 1)
+        XCTAssertEqual(CollectionMover.move([one], to: home), 0)
+    }
 }
