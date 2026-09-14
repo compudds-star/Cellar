@@ -14,6 +14,7 @@ struct WineDetailView: View {
     @State private var pickingPhoto = false
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var editingPhoto = false
+    @State private var takingPhoto = false
     @State private var editingWine = false
     @State private var movingBottles = false
 
@@ -207,6 +208,12 @@ struct WineDetailView: View {
                 pickedPhoto = nil
             }
         }
+        .fullScreenCover(isPresented: $takingPhoto) {
+            CameraCaptureView { image in
+                wine.labelImage = ImageResizer.jpeg(from: image, maxDimension: 1200)
+            }
+            .ignoresSafeArea()
+        }
         .fullScreenCover(isPresented: $editingPhoto) {
             if let data = wine.labelImage, let ui = UIImage(data: data) {
                 PhotoEditorView(image: ui) { edited in
@@ -246,10 +253,17 @@ struct WineDetailView: View {
     /// Add, replace, crop/rotate, or remove the wine's label photo.
     private var photoMenu: some View {
         Menu {
+            if CameraCaptureView.isAvailable {
+                Button {
+                    takingPhoto = true
+                } label: {
+                    Label(wine.labelImage == nil ? "Take photo" : "Take new photo", systemImage: "camera")
+                }
+            }
             Button {
                 pickingPhoto = true
             } label: {
-                Label(wine.labelImage == nil ? "Add photo" : "Replace photo", systemImage: "photo")
+                Label(wine.labelImage == nil ? "Choose from Photos" : "Replace from Photos", systemImage: "photo")
             }
             if wine.labelImage != nil {
                 Button {

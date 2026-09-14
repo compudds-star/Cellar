@@ -83,6 +83,7 @@ Cellar/                      app source (Swift)
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
                             BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
                             PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry),
+                            CameraCaptureView (take a label photo; hidden without a camera),
                             CollectionsView (manage) / CollectionDetailView / CollectionPicker /
                             MoveToCollectionMenu (Cellar list Select mode) / MoveBottlesSheet,
                             WineEditorView (edit a saved wine; WineDraft = pure form model)

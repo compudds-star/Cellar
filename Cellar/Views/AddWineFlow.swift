@@ -39,6 +39,7 @@ struct AddWineFlow: View {
     @State private var showingLWIN = false
     @State private var photoItem: PhotosPickerItem?
     @State private var editingPhoto = false
+    @State private var takingPhoto = false
     @State private var didAutoStartScanner = false
     @State private var collection: CellarCollection?
 
@@ -76,6 +77,14 @@ struct AddWineFlow: View {
                     PhotosPicker(selection: $photoItem, matching: .images) {
                         Label(labelImage == nil ? "Add label photo" : "Change label photo",
                               systemImage: "photo")
+                    }
+                    if CameraCaptureView.isAvailable {
+                        Button {
+                            takingPhoto = true
+                        } label: {
+                            Label(labelImage == nil ? "Take label photo" : "Retake label photo",
+                                  systemImage: "camera")
+                        }
                     }
                     if let labelImage, let ui = UIImage(data: labelImage) {
                         Image(uiImage: ui).resizable().scaledToFit().frame(maxHeight: 160)
@@ -222,6 +231,12 @@ struct AddWineFlow: View {
                     }
                 }
             }
+            .fullScreenCover(isPresented: $takingPhoto) {
+                CameraCaptureView { image in
+                    Task { await useLabelPhoto(image) }
+                }
+                .ignoresSafeArea()
+            }
             .fullScreenCover(isPresented: $editingPhoto) {
                 if let data = labelImage, let ui = UIImage(data: data) {
                     PhotoEditorView(image: ui) { edited in
@@ -246,17 +261,22 @@ struct AddWineFlow: View {
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
                 Task {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        labelImage = ImageResizer.jpeg(from: data, maxDimension: 1200)
-                        // Read the label too — but only into an empty form, never
-                        // over what the user already typed.
-                        if producer.isEmpty, name.isEmpty, let image = UIImage(data: data) {
-                            let lines = await ImageTextRecognizer.recognizeLines(in: image)
-                            if !lines.isEmpty { apply(LabelParser.parse(textLines: lines)) }
-                        }
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        await useLabelPhoto(image)
                     }
                 }
             }
+        }
+    }
+
+    /// Stores a picked or camera photo, and reads the label — but only into an empty
+    /// form, never over what the user already typed.
+    private func useLabelPhoto(_ image: UIImage) async {
+        labelImage = ImageResizer.jpeg(from: image, maxDimension: 1200)
+        if producer.isEmpty, name.isEmpty {
+            let lines = await ImageTextRecognizer.recognizeLines(in: image)
+            if !lines.isEmpty { apply(LabelParser.parse(textLines: lines)) }
         }
     }
 

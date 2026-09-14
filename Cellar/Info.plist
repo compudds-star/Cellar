@@ -20,7 +20,7 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<!-- Camera: required for live label scanning (VisionKit DataScanner). -->
 	<key>NSCameraUsageDescription</key>
-	<string>Cellar uses the camera to scan a wine bottle's label and read its name, producer, and vintage.</string>
+	<string>Cellar uses the camera to scan or photograph a bottle's label and read its name, producer, and vintage.</string>
 	<!-- Photo library: optional path to run OCR on a picture you already took. -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cellar can read a wine label from a photo you choose from your library.</string>
