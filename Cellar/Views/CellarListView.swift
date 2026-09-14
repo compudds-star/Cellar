@@ -58,7 +58,8 @@ struct CellarListView: View {
                                     WineRow(wine: wine, scope: scope)
                                 }
                             }
-                            .onDelete(perform: delete)
+                            // No delete buttons while selecting, so a mis-tap can't delete a wine.
+                            .onDelete(perform: editMode.isEditing ? nil : delete)
                         } header: {
                             HStack {
                                 Text("\(filtered.count) wines")
