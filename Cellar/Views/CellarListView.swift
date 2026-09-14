@@ -174,7 +174,7 @@ struct WineRow: View {
             WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type)
             VStack(alignment: .leading, spacing: 3) {
                 Text(wine.nameLine).font(.headline).lineLimit(2)
-                Text(wine.vintageLabel).font(.subheadline.weight(.semibold))
+                Text(wine.vintageLabel).font(.footnote.weight(.semibold))
                 let sub = [wine.varietal, wine.region].filter { !$0.isEmpty }.joined(separator: " · ")
                 if !sub.isEmpty {
                     Text(sub).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
