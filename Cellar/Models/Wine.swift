@@ -281,6 +281,28 @@ final class Wine {
         set { typeRaw = newValue.rawValue }
     }
 
+    /// Producer and name — what the Cellar list sorts by.
+    var sortName: String {
+        [producer, name].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    /// Alphabetical by producer and name (ignoring case and accents), then vintage
+    /// oldest first with NV last, then date added.
+    static func alphabeticalOrder(_ a: Wine, _ b: Wine) -> Bool {
+        switch a.sortName.compare(b.sortName, options: [.caseInsensitive, .diacriticInsensitive, .numeric],
+                                  locale: .current) {
+        case .orderedAscending: return true
+        case .orderedDescending: return false
+        case .orderedSame:
+            switch (a.vintage, b.vintage) {
+            case let (x?, y?) where x != y: return x < y
+            case (nil, _?): return false
+            case (_?, nil): return true
+            default: return a.createdAt < b.createdAt
+            }
+        }
+    }
+
     var displayTitle: String {
         let v = vintage.map { String($0) } ?? "NV"
         let head = [producer, name].filter { !$0.isEmpty }.joined(separator: " ")

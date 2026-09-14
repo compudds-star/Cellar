@@ -127,6 +127,31 @@ struct StatsSummarySections: View {
             }
         }
 
+        if stats.pricedBottleCount > 0 {
+            Section {
+                HStack {
+                    Text("You paid")
+                    Spacer()
+                    Text(Money.string(stats.paidTotal)).fontWeight(.semibold)
+                }
+                if let gain = stats.gainDescription {
+                    HStack {
+                        Text("Gain")
+                        Spacer()
+                        Text(gain)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(stats.gain < 0 ? Color.red : Color.green)
+                    }
+                }
+            } header: {
+                Text("Cost & gain")
+            } footer: {
+                if stats.comparableBottleCount < stats.bottleCount {
+                    Text("Gain covers the \(stats.comparableBottleCount) of \(stats.bottleCount) bottles that have both a price paid and an estimate.")
+                }
+            }
+        }
+
         if !stats.byType.isEmpty {
             Section("Value by type") {
                 Chart(stats.byType, id: \.type) { entry in

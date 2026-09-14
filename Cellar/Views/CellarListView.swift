@@ -26,6 +26,7 @@ struct CellarListView: View {
                 || wine.region.localizedCaseInsensitiveContains(searchText)
             return matchesType && matchesScope && matchesSearch
         }
+        .sorted(by: Wine.alphabeticalOrder)
     }
 
     private var selectedWines: [Wine] { filtered.filter { selection.contains($0.id) } }

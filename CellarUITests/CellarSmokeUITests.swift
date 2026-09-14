@@ -34,8 +34,7 @@ final class CellarSmokeUITests: XCTestCase {
         snapshot("01-add-wine-form")
         app.navigationBars["Add wine"].buttons["Save"].tap()
 
-        let row = cell(containing: producer)
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "new wine not in cellar list")
+        let row = searchCellar(for: producer)
         snapshot("02-cellar-list")
 
         // MARK: Detail — tasting note, extra bottle, where to buy
@@ -66,6 +65,7 @@ final class CellarSmokeUITests: XCTestCase {
         snapshot("04-where-to-buy")
         app.navigationBars["Where to buy"].buttons.firstMatch.tap()   // back
         app.navigationBars.buttons["Cellar"].tap()                     // back to list
+        clearCellarSearch()
 
         // MARK: Wishlist — add, then move to cellar
         app.navigationBars["Cellar"].buttons["Add"].tap()
@@ -82,13 +82,19 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(wishRow.waitForNonExistence(timeout: 5), "item still on wishlist")
 
         app.tabBars.buttons["Cellar"].tap()
-        XCTAssertTrue(cell(containing: wishProducer).waitForExistence(timeout: 5),
-                      "moved item not in cellar")
+        searchCellar(for: wishProducer)
+        clearCellarSearch()
 
         // MARK: Value — dashboard + CSV/PDF export
         app.tabBars.buttons["Value"].tap()
         XCTAssertTrue(app.navigationBars["Value"].waitForExistence(timeout: 5))
         snapshot("06-value")
+        let gainRow = app.staticTexts["Gain"]
+        reveal(gainRow)
+        XCTAssertTrue(gainRow.exists, "gain row missing on the Value tab")
+        XCTAssertTrue(app.staticTexts["You paid"].exists, "paid total missing on the Value tab")
+        snapshot("06b-value-gain")
+        app.swipeDown(velocity: .fast)
         for (menuItem, name) in [("Export CSV", "07-export-csv"), ("Export PDF summary", "08-export-pdf")] {
             app.navigationBars["Value"].buttons["Export"].tap()
             app.buttons[menuItem].tap()
@@ -134,9 +140,7 @@ final class CellarSmokeUITests: XCTestCase {
         app.navigationBars["Add wine"].buttons["Save"].tap()
 
         // One more bottle at the beach.
-        let row = cell(containing: producer)
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.tap()
+        searchCellar(for: producer).tap()
         tap(app.buttons["Add a bottle"])
         XCTAssertTrue(app.navigationBars["Add bottles"].waitForExistence(timeout: 5))
         chooseCollection(beach)
@@ -202,7 +206,7 @@ final class CellarSmokeUITests: XCTestCase {
             for _ in 1..<bottles { stepper.buttons["Increment"].tap() }
             choose("None", in: "Collection")
             app.navigationBars["Add wine"].buttons["Save"].tap()
-            XCTAssertTrue(cell(containing: producer).waitForExistence(timeout: 5), "\(producer) not added")
+            XCTAssertTrue(app.navigationBars["Add wine"].waitForNonExistence(timeout: 5), "\(producer) not saved")
         }
         func cabinRow(bottles: String) -> XCUIElement {
             app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", cabin, bottles)).firstMatch
@@ -212,6 +216,7 @@ final class CellarSmokeUITests: XCTestCase {
         addWine(wineB, bottles: 1)
 
         app.navigationBars["Cellar"].buttons["Select"].tap()
+        searchCellar(for: stamp)
         cell(containing: wineA).tap()
         cell(containing: wineB).tap()
         let moveMenu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Move to'")).firstMatch
@@ -232,7 +237,8 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(threeBottles.label.contains("$150.00"), threeBottles.label)
 
         app.tabBars.buttons["Cellar"].tap()
-        cell(containing: wineA).tap()
+        clearCellarSearch()
+        searchCellar(for: wineA).tap()
         tap(app.buttons["Move bottles…"])
         XCTAssertTrue(app.navigationBars["Move bottles"].waitForExistence(timeout: 5), "move sheet didn't open")
         app.buttons.matching(identifier: "moveBottleRow").firstMatch.tap()
@@ -286,9 +292,7 @@ final class CellarSmokeUITests: XCTestCase {
         type(producer, into: app.textFields["Producer"])
         type("2015", into: app.textFields["Vintage (blank = NV)"])
         app.navigationBars["Add wine"].buttons["Save"].tap()
-        let row = cell(containing: producer)
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.tap()
+        searchCellar(for: producer).tap()
 
         let detailBar = app.navigationBars["2015 \(producer)"]
         XCTAssertTrue(detailBar.waitForExistence(timeout: 5))
@@ -304,8 +308,11 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["White"].exists, "type didn't update")
         snapshot("17-edited-wine")
         app.navigationBars["2016 \(edited)"].buttons["Cellar"].tap()
-        XCTAssertTrue(cell(containing: edited).waitForExistence(timeout: 5))
+        clearCellarSearch()
+        searchCellar(for: stamp)
+        XCTAssertTrue(cell(containing: edited).exists, "edited name not listed")
         XCTAssertFalse(cell(containing: "2015 \(producer)").exists, "old name still listed")
+        clearCellarSearch()
     }
 
     /// Crop and rotate a label photo in the Add form. The system photo picker can't be
@@ -368,9 +375,7 @@ final class CellarSmokeUITests: XCTestCase {
         type(producer, into: app.textFields["Producer"])
         type("2018", into: app.textFields["Vintage (blank = NV)"])
         app.navigationBars["Add wine"].buttons["Save"].tap()
-        let row = cell(containing: producer)
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.tap()
+        searchCellar(for: producer).tap()
 
         // Saving the wine started a lookup automatically — no Refresh tap needed.
         let provenance = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From '")).firstMatch
@@ -403,6 +408,33 @@ final class CellarSmokeUITests: XCTestCase {
                 alert.buttons[label].tap()
                 break
             }
+        }
+    }
+
+    /// The Cellar list is alphabetical, so a newly added wine may be off-screen: search for it.
+    @discardableResult
+    private func searchCellar(for text: String) -> XCUIElement {
+        let field = app.searchFields["Search wines"]
+        if !field.waitForExistence(timeout: 2) { app.swipeDown(velocity: .fast) }
+        XCTAssertTrue(field.waitForExistence(timeout: 3), "cellar search field missing")
+        field.tap()
+        let clear = field.buttons["Clear text"]
+        if clear.exists { clear.tap() }
+        field.typeText(text)
+        let searchKey = app.keyboards.buttons["search"]
+        if searchKey.exists { searchKey.tap() }
+        let row = cell(containing: text)
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "\(text) not found in the cellar")
+        return row
+    }
+
+    /// Ends a Cellar search so the full list and toolbar come back.
+    private func clearCellarSearch() {
+        let cancel = app.navigationBars.buttons["Cancel"]
+        if cancel.exists {
+            cancel.tap()
+        } else if app.buttons["Cancel"].firstMatch.exists {
+            app.buttons["Cancel"].firstMatch.tap()
         }
     }
 

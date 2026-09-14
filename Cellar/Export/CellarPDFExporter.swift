@@ -37,7 +37,7 @@ enum CellarPDFExporter {
             y += 30
             let df = DateFormatter(); df.dateStyle = .long
             """
-            \(stats.bottleCount) bottles · \(stats.wineCount) wines · Estimated value \(Money.string(stats.totalValue))
+            \(stats.bottleCount) bottles · \(stats.wineCount) wines · Estimated value \(Money.string(stats.totalValue))\(stats.pricedBottleCount > 0 ? " · Paid \(Money.string(stats.paidTotal))" : "")\(stats.gainDescription.map { " · Gain \($0)" } ?? "")
             Exported \(df.string(from: .now))
             """.draw(in: CGRect(x: margin, y: y, width: pageRect.width - 2*margin, height: 34),
                      withAttributes: subAttr)

@@ -135,4 +135,58 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(CollectionMover.move([one], to: home), 1)
         XCTAssertEqual(CollectionMover.move([one], to: home), 0)
     }
+
+    func testPaidTotalAndGain() {
+        let estimated = Wine(name: "Estimated", manualEstimatedValue: 100)
+        let noEstimate = Wine(name: "No estimate")
+        ctx.insert(estimated)
+        ctx.insert(noEstimate)
+        let specs: [(Decimal, BottleSize)] = [(60, .standard), (80, .standard), (150, .magnum)]
+        for (price, size) in specs {
+            let bottle = Bottle(size: size, purchasePrice: price)
+            ctx.insert(bottle)
+            estimated.bottles.append(bottle)
+        }
+        let unpriced = Bottle()
+        let consumed = Bottle(status: .consumed, purchasePrice: 999)
+        let paidButUnvalued = Bottle(purchasePrice: 30)
+        for bottle in [unpriced, consumed, paidButUnvalued] { ctx.insert(bottle) }
+        estimated.bottles.append(unpriced)
+        estimated.bottles.append(consumed)
+        noEstimate.bottles.append(paidButUnvalued)
+
+        let stats = CellarStats(wines: [estimated, noEstimate])
+        XCTAssertEqual(stats.paidTotal, 320)             // 60 + 80 + 150 + 30; consumed excluded
+        XCTAssertEqual(stats.pricedBottleCount, 4)
+        XCTAssertEqual(stats.comparableBottleCount, 3)   // no estimate → no gain for that bottle
+        XCTAssertEqual(stats.gain, 110)                  // (100-60) + (100-80) + (200-150)
+        XCTAssertEqual(stats.gainDescription, "+$110.00 (+37.9%)")
+
+        let loss = Wine(name: "Loss", manualEstimatedValue: 50)
+        ctx.insert(loss)
+        let dear = Bottle(purchasePrice: 80)
+        ctx.insert(dear)
+        loss.bottles.append(dear)
+        XCTAssertEqual(CellarStats(wines: [loss]).gainDescription, "-$30.00 (-37.5%)")
+        XCTAssertNil(CellarStats(wines: [noEstimate]).gainDescription)
+    }
+
+    func testCellarSortsAlphabeticallyByProducerAndName() {
+        let wines = [
+            Wine(name: "Grand Vin", producer: "Château Margaux", vintage: 2015),
+            Wine(name: "", producer: "opus one", vintage: 2018),
+            Wine(name: "Almaviva", producer: "", vintage: 2019),
+            Wine(name: "Grand Vin", producer: "Chateau Latour", vintage: 2010),
+            Wine(name: "Grand Vin", producer: "Chateau Latour", vintage: nil),
+            Wine(name: "Grand Vin", producer: "Chateau Latour", vintage: 2005),
+        ]
+        let order = wines.sorted(by: Wine.alphabeticalOrder)
+            .map { "\($0.sortName) \($0.vintage.map(String.init) ?? "NV")" }
+        XCTAssertEqual(order, ["Almaviva 2019",
+                               "Chateau Latour Grand Vin 2005",
+                               "Chateau Latour Grand Vin 2010",
+                               "Chateau Latour Grand Vin NV",
+                               "Château Margaux Grand Vin 2015",
+                               "opus one 2018"])
+    }
 }
