@@ -79,7 +79,7 @@ struct WineEditorView: View {
     let wine: Wine
     @State private var draft: WineDraft
     @State private var showingLWIN = false
-    @State private var confirmingWishlist = false
+    @State private var confirmingMove = false
 
     init(wine: Wine) {
         self.wine = wine
@@ -159,29 +159,36 @@ struct WineEditorView: View {
                         .lineLimit(2...6)
                 }
 
-                if !wine.isWishlist {
-                    Section {
-                        Button {
-                            confirmingWishlist = true
-                        } label: {
+                Section {
+                    Button {
+                        confirmingMove = true
+                    } label: {
+                        if wine.isWishlist {
+                            Label("Move to Cellar", systemImage: "tray.and.arrow.down")
+                        } else {
                             Label("Move to Wishlist", systemImage: "star")
                         }
-                        .disabled(!draft.canSave)
-                    } footer: {
-                        Text("Keeps every detail, photo, price, and bottle. It stops counting toward your cellar value until you move it back.")
                     }
+                    .disabled(!draft.canSave)
+                } footer: {
+                    Text(wine.isWishlist
+                         ? "Adds it to your cellar with its bottles, or one new bottle if it has none."
+                         : "Keeps every detail, photo, price, and bottle. It stops counting toward your cellar value until you move it back.")
                 }
             }
-            .confirmationDialog("Move to Wishlist?", isPresented: $confirmingWishlist, titleVisibility: .visible) {
-                Button("Move to Wishlist") {
+            .confirmationDialog(wine.isWishlist ? "Move to Cellar?" : "Move to Wishlist?",
+                                isPresented: $confirmingMove, titleVisibility: .visible) {
+                Button(wine.isWishlist ? "Move to Cellar" : "Move to Wishlist") {
                     applyEdits()
-                    WishlistMove.toWishlist(wine)
+                    if wine.isWishlist {
+                        WishlistMove.toCellar(wine, context: context)
+                    } else {
+                        WishlistMove.toWishlist(wine)
+                    }
                     dismiss()
                 }
             } message: {
-                Text(wine.inStockCount == 0
-                     ? "Your edits are saved too."
-                     : "Its \(wine.inStockCount) bottle\(wine.inStockCount == 1 ? "" : "s") in stock stay with it. Your edits are saved too.")
+                Text(moveMessage)
             }
             .navigationTitle("Edit wine")
             .navigationBarTitleDisplayMode(.inline)
@@ -202,6 +209,19 @@ struct WineEditorView: View {
                 }
             }
         }
+    }
+
+    private var moveMessage: String {
+        let count = wine.inStockCount
+        let bottles = "\(count) bottle\(count == 1 ? "" : "s")"
+        if wine.isWishlist {
+            return count == 0
+                ? "One bottle is added at your default size and collection. Your edits are saved too."
+                : "Its \(bottles) in stock come back with it. Your edits are saved too."
+        }
+        return count == 0
+            ? "Your edits are saved too."
+            : "Its \(bottles) in stock stay with it. Your edits are saved too."
     }
 
     private func save() {

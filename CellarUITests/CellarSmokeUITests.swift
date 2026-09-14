@@ -295,9 +295,17 @@ final class CellarSmokeUITests: XCTestCase {
         if !wishRow.waitForExistence(timeout: 3) { reveal(wishRow) }
         XCTAssertTrue(wishRow.exists, "wine not on the Wishlist")
         snapshot("21-moved-to-wishlist")
-        wishRow.swipeRight()
-        app.buttons["Move to cellar"].tap()
-        XCTAssertTrue(wishRow.waitForNonExistence(timeout: 5))
+        // Back to the cellar from the Wishlist wine's Edit screen.
+        wishRow.tap()
+        app.navigationBars.buttons["Edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForExistence(timeout: 5), "editor didn't open from the Wishlist")
+        tap(app.buttons["Move to Cellar"])
+        let confirmCellar = app.sheets.buttons["Move to Cellar"]
+        XCTAssertTrue(confirmCellar.waitForExistence(timeout: 5), "Move to Cellar confirmation missing")
+        confirmCellar.tap()
+        XCTAssertTrue(app.navigationBars["Edit wine"].waitForNonExistence(timeout: 5))
+        if app.navigationBars.buttons["Wishlist"].exists { app.navigationBars.buttons["Wishlist"].tap() }
+        XCTAssertTrue(wishRow.waitForNonExistence(timeout: 5), "wine still on the Wishlist")
 
         app.tabBars.buttons["Cellar"].tap()
         searchCellar(for: producer).tap()
