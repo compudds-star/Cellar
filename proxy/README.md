@@ -129,19 +129,34 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
   request params and response field names against your Wine-Searcher API docs**
   and adjust the mapping marked `ADJUST` in `server.js` — their exact schema
   isn't public, so the adapter maps common field names best-effort.
-- `PROVIDER=apify` — set `APIFY_TOKEN`. Uses the `mrbridge~vivino-wine-data-scraper`
-  actor (~$0.003 per wine; runs on Apify's free plan with no residential proxy).
-  The proxy sends the producer + cuvée (plus the vintage when known) and, for a
-  longer name, a producer-only variant in the same run — Vivino's own names often
-  differ from the label ("Yellow Label" is listed as "Carte Jaune"), and an
-  unmatched query returns nothing. It ranks the candidates by the actor's
-  `matchScore` with an exact vintage match on top, breaking ties by rating count, scales 700 mL / 750 mL / 1 L prices to a standard bottle and
-  drops formats that don't scale (half bottles, magnums), converts a non-matching
-  currency with ECB rates (frankfurter.app), and maps Vivino's 1–5 community
-  rating onto the app's 100-point score. Vivino quotes one price and at most one
-  merchant per wine, so `min`/`max` come back empty and "Where to buy" shows a
-  single online link — nearby stores come from MapKit on the phone. Cold lookups
-  take ~10–25 s; repeats are cached for 7 days.
+- `PROVIDER=apify` — set `APIFY_TOKEN`. Runs two actors in parallel and merges
+  them; neither needs Apify residential proxies, so both work on the free plan:
+  - `mrbridge~vivino-wine-data-scraper` (`APIFY_ACTOR`, ~$0.003/wine, ~20 s) for
+    the retail price, community rating and label image. The proxy sends the
+    producer + cuvée (plus the vintage when known) and, for a longer name, a
+    producer-only variant in the same run — Vivino's own names often differ from
+    the label ("Yellow Label" is listed as "Carte Jaune"), and an unmatched query
+    returns a placeholder row named "Not found". It ranks candidates by the
+    actor's `matchScore` with an exact vintage match on top, breaking ties by
+    rating count, scales 700 mL / 750 mL / 1 L prices to a standard bottle, drops
+    formats that don't scale (half bottles, magnums), and maps Vivino's 1–5
+    rating onto the app's 100-point score.
+  - `mrbridge~wine-searcher-scraper-from-list` (`APIFY_WS_ACTOR`, ~80 s) for the
+    aggregated **critic** score and the cheapest listing on the market, already
+    converted to the requested currency. Set it to `""` to switch this half off.
+
+  The merge: Vivino's asking price becomes `average` (what a bottle is worth),
+  Wine-Searcher's cheapest becomes `min` plus a merchant offer, and its critic
+  score wins over a community star average. Wine-Searcher gets a 110 s deadline —
+  inside the app's own 150 s request timeout — and is dropped if it's late, so a
+  slow half can't sink the lookup; the wine keeps its Vivino price and image and
+  just misses the critic score until the next refresh. `max` stays empty (neither quotes a range) and online
+  offers are thin; nearby stores come from MapKit on the phone. Repeats are
+  cached for 7 days.
+
+  Not `abotapi~wine-searcher-scraper`: its own README says Wine-Searcher accepts
+  only residential connections, so it needs Apify Residential (Starter plan or
+  higher) and fails every lookup on the free plan with an HTTP 400.
 
 ## Security notes
 
