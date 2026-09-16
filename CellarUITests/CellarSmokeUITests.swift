@@ -536,6 +536,18 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(provenance.waitForExistence(timeout: 30), "price wasn't looked up automatically")
         XCTAssertFalse(app.alerts["Couldn't fetch price"].exists)
         snapshot("09-price-refreshed")
+
+        // The score the lookup returned is shown as a badge, on the detail
+        // screen and back in the list row.
+        let badge = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Score '")).firstMatch
+        reveal(badge)
+        XCTAssertTrue(badge.exists, "no score badge on the wine's detail screen")
+        snapshot("10-score-badge-detail")
+
+        app.navigationBars.buttons["Cellar"].tap()
+        let rowBadge = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Score '")).firstMatch
+        XCTAssertTrue(rowBadge.waitForExistence(timeout: 5), "no score badge in the list row")
+        snapshot("11-score-badge-list")
     }
 
     private func proxyIsRunning() -> Bool {
