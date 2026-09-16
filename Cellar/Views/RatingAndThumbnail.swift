@@ -27,11 +27,13 @@ struct StarRating: View {
 /// Compact read-only star row for list cells.
 struct StarsInline: View {
     let rating: Int
+    var size: CGFloat = 10
+
     var body: some View {
         HStack(spacing: 1) {
             ForEach(1...5, id: \.self) { i in
                 Image(systemName: i <= rating ? "star.fill" : "star")
-                    .font(.system(size: 10))
+                    .font(.system(size: size))
                     .foregroundStyle(i <= rating ? .yellow : Color.secondary.opacity(0.35))
             }
         }

@@ -170,8 +170,19 @@ struct WineRow: View {
     var scope: CollectionScope = .all
 
     var body: some View {
-        HStack(spacing: 12) {
-            WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type)
+        // Top-aligned so the name stays level with the top of the label, whatever
+        // the rating column adds below it.
+        HStack(alignment: .top, spacing: 12) {
+            // Rating sits under the label, the way it does on the wine's own screen.
+            VStack(spacing: 5) {
+                WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type)
+                if let score = wine.communityScore {
+                    ScoreBadge(score: score)
+                }
+                if let rating = wine.rating, rating > 0 {
+                    StarsInline(rating: rating, size: 13)
+                }
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(wine.nameLine).font(.headline).lineLimit(2)
                 Text(wine.vintageLabel).font(.footnote.weight(.semibold))
@@ -180,12 +191,6 @@ struct WineRow: View {
                     Text(sub).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
                 HStack(spacing: 6) {
-                    if let rating = wine.rating, rating > 0 {
-                        StarsInline(rating: rating)
-                    }
-                    if let score = wine.communityScore {
-                        ScoreBadge(score: score, compact: true)
-                    }
                     if !wine.isWishlist {
                         Text("\(wine.inStockBottles(in: scope).count) in stock").font(.caption).foregroundStyle(.secondary)
                         if wine.hasValuation {
