@@ -38,6 +38,34 @@ struct StarsInline: View {
     }
 }
 
+/// A critic or community score on the 100-point scale, as a filled pill.
+/// Banded like the trade reads them: 95+ is exceptional, 90+ outstanding,
+/// 85+ very good, below that ordinary — so the number carries at a glance.
+struct ScoreBadge: View {
+    let score: Int
+    var compact = false
+
+    private var tint: Color {
+        switch score {
+        case 95...: return Color(red: 0.70, green: 0.51, blue: 0.11)   // gold
+        case 90..<95: return Color(red: 0.16, green: 0.48, blue: 0.24) // green
+        case 85..<90: return Color(red: 0.16, green: 0.40, blue: 0.56) // blue
+        default: return Color.secondary
+        }
+    }
+
+    var body: some View {
+        Text("\(score)")
+            .font(compact ? .caption2.weight(.bold) : .subheadline.weight(.bold))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .padding(.horizontal, compact ? 6 : 9)
+            .padding(.vertical, compact ? 2 : 4)
+            .background(tint, in: Capsule())
+            .accessibilityLabel("Score \(score) out of 100")
+    }
+}
+
 /// Wine label image with a graceful fallback chain:
 /// scanned/added photo → database image URL → type-tinted placeholder.
 struct WineThumbnail: View {

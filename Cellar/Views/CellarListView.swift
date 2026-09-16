@@ -184,7 +184,7 @@ struct WineRow: View {
                         StarsInline(rating: rating)
                     }
                     if let score = wine.communityScore {
-                        Text("\(score) pts").font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                        ScoreBadge(score: score, compact: true)
                     }
                     if !wine.isWishlist {
                         Text("\(wine.inStockBottles(in: scope).count) in stock").font(.caption).foregroundStyle(.secondary)

@@ -21,11 +21,15 @@ const {
   APIFY_TOKEN = "",                  // Apify token (secret)
   APIFY_ACTOR = "mrbridge~vivino-wine-data-scraper",
   APIFY_WS_ACTOR = "mrbridge~wine-searcher-scraper-from-list", // "" disables the critic-score half
+  WS_GRACE_SECONDS = "6",            // how long a lookup waits for the critic score
+  WS_TIMEOUT_SECONDS = "110",        // how long that half runs before giving up
   CACHE_TTL_SECONDS = "604800",      // 7 days — matches the app's per-wine TTL
   RATE_LIMIT_PER_MIN = "60",
 } = process.env;
 
 const CACHE_TTL_MS = Number(CACHE_TTL_SECONDS) * 1000;
+const WS_GRACE_MS = Number(WS_GRACE_SECONDS) * 1000;
+const WS_TIMEOUT_MS = Number(WS_TIMEOUT_SECONDS) * 1000;
 const RATE_LIMIT = Number(RATE_LIMIT_PER_MIN);
 
 const app = express();
@@ -86,7 +90,8 @@ app.get("/valuation", async (req, res) => {
   if (cached) return res.json(cached);
 
   try {
-    const body = await lookup({ lwin, q, vintage, currency });
+    const body = await lookup({ lwin, q, vintage, currency },
+                              (late) => cacheSet(cacheKey, late));
     cacheSet(cacheKey, body);
     res.json(body);
   } catch (err) {
@@ -97,10 +102,10 @@ app.get("/valuation", async (req, res) => {
 });
 
 // ---- Provider dispatch ------------------------------------------------------
-async function lookup(params) {
+async function lookup(params, onLate = () => {}) {
   switch (PROVIDER) {
     case "winesearcher": return await lookupWineSearcher(params);
-    case "apify":        return await lookupApify(params);
+    case "apify":        return await lookupApify(params, onLate);
     default:             return lookupMock(params);
   }
 }
@@ -210,7 +215,7 @@ async function apifyRun(actor, input, timeoutMs) {
   return Array.isArray(items) ? items : [];
 }
 
-async function lookupApify({ q, lwin, vintage, currency }) {
+async function lookupApify({ q, lwin, vintage, currency }, onLate = () => {}) {
   if (!APIFY_TOKEN) throw new Error("apify not configured");
   // Both actors search by name and neither takes an LWIN code; the app always
   // sends a name next to the code, so a code-only lookup means something broke.
@@ -221,17 +226,39 @@ async function lookupApify({ q, lwin, vintage, currency }) {
     console.error(`${label} lookup failed:`, err?.message || "error");
     return null;
   };
-  const [vivino, ws] = await Promise.all([
-    lookupVivinoActor({ q, vintage, currency }).catch(settle("vivino")),
-    APIFY_WS_ACTOR ? lookupWineSearcherActor({ q, vintage, currency }).catch(settle("wine-searcher")) : null,
-  ]);
-  if (!vivino && !ws) throw new Error("no provider answered");
+  const vivinoPromise = lookupVivinoActor({ q, vintage, currency }).catch(settle("vivino"));
+  const wsPromise = APIFY_WS_ACTOR
+    ? lookupWineSearcherActor({ q, vintage, currency }).catch(settle("wine-searcher"))
+    : Promise.resolve(null);
 
-  // Vivino's price is a typical retail asking price, so it's the better
-  // estimate of what a bottle is worth; Wine-Searcher's is the cheapest listing
-  // on the market, which is the floor. Its score is a real critic aggregate and
-  // beats a community star average whenever it's there.
-  const out = contract({
+  const vivino = await vivinoPromise;
+  // Wine-Searcher takes ~80 s against Vivino's ~20 s. Waiting for it would make
+  // every cold lookup as slow as the slowest half, so once there's something to
+  // show it gets only a short grace period (it's often already warm). If it's
+  // late we answer now and fold its critic score into the cache when it lands,
+  // so the next request — or the app's next refresh — has it without waiting.
+  // With nothing else to show, there's nothing to gain by answering early.
+  const grace = vivino ? WS_GRACE_MS : WS_TIMEOUT_MS;
+  const late = Symbol("late");
+  let ws = await Promise.race([wsPromise, sleep(grace).then(() => late)]);
+  if (ws === late) {
+    ws = null;
+    wsPromise.then((result) => { if (result) onLate(mergeApify({ vivino, ws: result, currency })); })
+      .catch(() => {});
+  }
+
+  const out = mergeApify({ vivino, ws, currency });
+  if (!vivino && !ws) throw new Error("no provider answered");
+  if (process.env.DEBUG_UPSTREAM === "1") out._raw = { vivino: vivino?._raw, ws: ws?._raw };
+  return out;
+}
+
+// Vivino's price is a typical retail asking price, so it's the better estimate
+// of what a bottle is worth; Wine-Searcher's is the cheapest listing on the
+// market, which is the floor. Its score is a real critic aggregate and beats a
+// community star average whenever it's there.
+function mergeApify({ vivino, ws, currency }) {
+  return contract({
     average: vivino?.average ?? ws?.average ?? null,
     min: ws?.min ?? null,
     max: null,
@@ -241,8 +268,6 @@ async function lookupApify({ q, lwin, vintage, currency }) {
     offers: [...(ws?.offers ?? []), ...(vivino?.offers ?? [])],
     source: [ws && "wine-searcher", vivino && "vivino"].filter(Boolean).join(" + ") || null,
   });
-  if (process.env.DEBUG_UPSTREAM === "1") out._raw = { vivino: vivino?._raw, ws: ws?._raw };
-  return out;
 }
 
 // ---- Vivino: price, community rating, label image ---------------------------
@@ -344,7 +369,7 @@ async function lookupWineSearcherActor({ q, vintage, currency }) {
     inputType: "wineNames",
     wineNames: [wanted ? `${q} ${wanted}` : q],
     targetCurrency: currency,
-  }, 110000);
+  }, WS_TIMEOUT_MS);
   const f = items[0];
   if (!f || (f.status && f.status !== "ok")) return null;
 
@@ -407,6 +432,7 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 function money(n) { return Math.round(n * 100) / 100; }
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function merchantName(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "Merchant"; }
 }

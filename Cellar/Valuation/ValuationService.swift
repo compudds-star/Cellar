@@ -24,6 +24,13 @@ protocol ValuationService {
     func estimate(for wine: Wine) async throws -> ValuationResult?
 }
 
+/// A backend that answers "what's it worth?" and "where do I buy it?" from a
+/// single response. The remote endpoint returns both in one JSON body, so
+/// asking separately would pay for the same round trip twice.
+protocol CombinedValuationService: ValuationService, PurchaseService {
+    func estimateAndOffers(for wine: Wine) async throws -> (ValuationResult?, [MerchantOffer])
+}
+
 /// Offline baseline. There is no remote pricing yet: the "estimate" is whatever
 /// the user typed as the manual per-750mL value, echoed back as a snapshot so
 /// the rest of the app treats manual and enriched values identically.

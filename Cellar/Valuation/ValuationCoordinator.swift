@@ -39,8 +39,14 @@ enum ValuationCoordinator {
         if !force, isFresh(wine, ttlDays: ttlDays) { return false }
 
         // One network call backs both, via the shared DTO on the client.
-        let result = try await service.estimate(for: wine)
-        let offers = try await service.offers(for: wine)
+        let result: ValuationResult?
+        let offers: [MerchantOffer]
+        if let combined = service as? CombinedValuationService {
+            (result, offers) = try await combined.estimateAndOffers(for: wine)
+        } else {
+            result = try await service.estimate(for: wine)
+            offers = try await service.offers(for: wine)
+        }
 
         if let result {
             let snapshot = ValuationSnapshot(averagePrice: result.averagePrice,

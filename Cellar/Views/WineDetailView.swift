@@ -18,6 +18,15 @@ struct WineDetailView: View {
     @State private var editingWine = false
     @State private var movingBottles = false
 
+    /// Name the score for what it is: Wine-Searcher aggregates critics, Vivino
+    /// averages drinkers. Older snapshots don't say, so they stay generic.
+    private var scoreLabel: String {
+        let source = wine.latestValuation?.source ?? ""
+        if source.contains("wine-searcher") { return "Critic score" }
+        if source.contains("vivino") { return "Community score" }
+        return "Critic / community"
+    }
+
     var body: some View {
         List {
             Section {
@@ -111,9 +120,9 @@ struct WineDetailView: View {
                 }
                 if let score = wine.communityScore {
                     HStack {
-                        Text("Critic / community")
+                        Text(scoreLabel)
                         Spacer()
-                        Text("\(score) pts").foregroundStyle(.secondary)
+                        ScoreBadge(score: score)
                     }
                 }
             }

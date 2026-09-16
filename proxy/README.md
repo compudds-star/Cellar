@@ -147,12 +147,20 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
 
   The merge: Vivino's asking price becomes `average` (what a bottle is worth),
   Wine-Searcher's cheapest becomes `min` plus a merchant offer, and its critic
-  score wins over a community star average. Wine-Searcher gets a 110 s deadline —
-  inside the app's own 150 s request timeout — and is dropped if it's late, so a
-  slow half can't sink the lookup; the wine keeps its Vivino price and image and
-  just misses the critic score until the next refresh. `max` stays empty (neither quotes a range) and online
-  offers are thin; nearby stores come from MapKit on the phone. Repeats are
-  cached for 7 days.
+  score wins over a community star average.
+
+  **A lookup never waits for the slow half.** Once Vivino answers (~20–30 s),
+  Wine-Searcher gets only `WS_GRACE_SECONDS` (default 6 — it's often already
+  warm) before the response goes out without it. It keeps running up to
+  `WS_TIMEOUT_SECONDS` (default 110) in the background, and when it lands its
+  critic score and cheapest price are merged into the cached entry, so the next
+  request — or the app's next refresh — gets them instantly. Measured: a cold
+  lookup returns in ~28 s, and the same wine 100 s later returns in 69 ms with
+  the score upgraded and the merchant offer added. With nothing to show (Vivino
+  found nothing) the lookup waits the full timeout instead.
+
+  `max` stays empty (neither actor quotes a range) and online offers are thin;
+  nearby stores come from MapKit on the phone. Repeats are cached for 7 days.
 
   Not `abotapi~wine-searcher-scraper`: its own README says Wine-Searcher accepts
   only residential connections, so it needs Apify Residential (Starter plan or

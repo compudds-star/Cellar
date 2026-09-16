@@ -58,7 +58,7 @@ struct RemoteValuationDTO: Decodable {
 /// Talks to the configured endpoint and maps its response into the app's
 /// `ValuationService` and `PurchaseService` abstractions. One fetch backs both,
 /// so a refresh makes a single network call.
-struct RemoteValuationClient: ValuationService, PurchaseService {
+struct RemoteValuationClient: CombinedValuationService {
     let config: ValuationConfig
     var session: URLSession = .shared
     /// Source tag written onto snapshots; overridable if you point at a
@@ -66,7 +66,24 @@ struct RemoteValuationClient: ValuationService, PurchaseService {
     var sourceName: String = "wine-searcher"
 
     func estimate(for wine: Wine) async throws -> ValuationResult? {
-        guard let dto = try await fetch(for: wine), let avg = dto.average else { return nil }
+        guard let dto = try await fetch(for: wine) else { return nil }
+        return result(from: dto)
+    }
+
+    func offers(for wine: Wine) async throws -> [MerchantOffer] {
+        guard let dto = try await fetch(for: wine) else { return [] }
+        return offers(from: dto)
+    }
+
+    /// Both answers from one fetch — a cold lookup can take a minute upstream,
+    /// so it's worth not asking for the same body twice.
+    func estimateAndOffers(for wine: Wine) async throws -> (ValuationResult?, [MerchantOffer]) {
+        guard let dto = try await fetch(for: wine) else { return (nil, []) }
+        return (result(from: dto), offers(from: dto))
+    }
+
+    private func result(from dto: RemoteValuationDTO) -> ValuationResult? {
+        guard let avg = dto.average else { return nil }
         return ValuationResult(averagePrice: avg,
                                minPrice: dto.min,
                                maxPrice: dto.max,
@@ -76,9 +93,8 @@ struct RemoteValuationClient: ValuationService, PurchaseService {
                                imageURL: dto.image)
     }
 
-    func offers(for wine: Wine) async throws -> [MerchantOffer] {
-        guard let dto = try await fetch(for: wine) else { return [] }
-        return (dto.offers ?? []).map { o in
+    private func offers(from dto: RemoteValuationDTO) -> [MerchantOffer] {
+        (dto.offers ?? []).map { o in
             MerchantOffer(merchantName: o.merchant,
                           price: o.price,
                           currency: o.currency ?? "USD",
