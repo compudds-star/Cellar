@@ -176,7 +176,7 @@ struct WineRow: View {
             // A larger label than a thumbnail, with the critic score under it.
             VStack(spacing: 5) {
                 WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type,
-                              width: 72, height: 96)
+                              width: 72, height: 116)
                 if let score = wine.communityScore {
                     ScoreBadge(score: score)
                 }
@@ -187,6 +187,9 @@ struct WineRow: View {
                 let sub = [wine.varietal, wine.region].filter { !$0.isEmpty }.joined(separator: " · ")
                 if !sub.isEmpty {
                     Text(sub).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if let window = DrinkWindowEstimate.window(for: wine) {
+                    Text("Peak \(window.label)").font(.caption).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 6) {
                     if let rating = wine.rating, rating > 0 {
