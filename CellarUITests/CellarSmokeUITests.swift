@@ -43,7 +43,7 @@ final class CellarSmokeUITests: XCTestCase {
         let noteField = app.textFields["Tasting note"]
         XCTAssertTrue(noteField.waitForExistence(timeout: 5), "tasting note row not added")
         type("Dark cherry, firm tannins", into: noteField)
-        tap(element(labeled: "3 stars", last: true))
+        tap(star("3 stars", in: "note-rating"))
         tap(app.buttons["Add a bottle"])
         XCTAssertTrue(app.navigationBars["Add bottles"].waitForExistence(timeout: 5), "bottle editor didn't open")
         type("72", into: app.textFields["0.00"].firstMatch)
@@ -608,6 +608,20 @@ final class CellarSmokeUITests: XCTestCase {
 
     private func cell(containing text: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    /// A star inside a named rating control. Scoping by identifier keeps this
+    /// independent of how many other star controls are on screen: the wine's own
+    /// rating sits at the top of the detail screen, and scrolling recycles it in
+    /// and out of the hierarchy, which makes "the last star labelled X" a race.
+    private func star(_ label: String, in identifier: String) -> XCUIElement {
+        let flat = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ AND label == %@", identifier, label))
+        if flat.count > 0 { return flat.element(boundBy: 0) }
+        // SwiftUI may keep the identifier on the container instead of the stars.
+        return app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+            .descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
 
     private func element(labeled label: String, last: Bool = false) -> XCUIElement {

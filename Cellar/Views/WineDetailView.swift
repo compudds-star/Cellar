@@ -353,6 +353,9 @@ struct TastingNoteRow: View {
                 StarRating(rating: Binding(get: { note.score ?? 0 },
                                            set: { note.score = $0 > 0 ? $0 : nil }),
                            size: 16)
+                    // Names this rating apart from the wine's own stars, which
+                    // now sit at the top of the same screen.
+                    .accessibilityIdentifier("note-rating")
             }
             TextField("Tasting note", text: $note.text, axis: .vertical)
                 .lineLimit(1...6)
