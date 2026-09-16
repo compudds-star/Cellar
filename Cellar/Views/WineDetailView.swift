@@ -38,6 +38,22 @@ struct WineDetailView: View {
             }
             .listRowInsets(EdgeInsets())
 
+            Section {
+                VStack(spacing: 10) {
+                    StarRating(rating: Binding(get: { wine.rating ?? 0 },
+                                               set: { wine.rating = $0 > 0 ? $0 : nil }),
+                               size: 30)
+                    if let score = wine.communityScore {
+                        HStack(spacing: 8) {
+                            ScoreBadge(score: score, large: true)
+                            Text(scoreLabel).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+
             Section("Details") {
                 detailRow("Varietal", wine.varietal)
                 detailRow("Region", [wine.region, wine.country].filter { !$0.isEmpty }.joined(separator: ", "))
@@ -108,23 +124,6 @@ struct WineDetailView: View {
                     }
                 }
                 .disabled(refreshing)
-            }
-
-            Section("Rating") {
-                HStack {
-                    Text("Your rating")
-                    Spacer()
-                    StarRating(rating: Binding(get: { wine.rating ?? 0 },
-                                               set: { wine.rating = $0 > 0 ? $0 : nil }),
-                               size: 22)
-                }
-                if let score = wine.communityScore {
-                    HStack {
-                        Text(scoreLabel)
-                        Spacer()
-                        ScoreBadge(score: score)
-                    }
-                }
             }
 
             if wine.isWishlist {

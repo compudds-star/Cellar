@@ -532,17 +532,19 @@ final class CellarSmokeUITests: XCTestCase {
         searchCellar(for: producer).tap()
 
         // Saving the wine started a lookup automatically — no Refresh tap needed.
-        let provenance = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From '")).firstMatch
-        XCTAssertTrue(provenance.waitForExistence(timeout: 30), "price wasn't looked up automatically")
-        XCTAssertFalse(app.alerts["Couldn't fetch price"].exists)
-        snapshot("09-price-refreshed")
-
-        // The score the lookup returned is shown as a badge, on the detail
-        // screen and back in the list row.
+        // The score badge sits under the label photo, so it's the first sign the
+        // lookup landed; the provenance line is further down the screen.
         let badge = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Score '")).firstMatch
-        reveal(badge)
-        XCTAssertTrue(badge.exists, "no score badge on the wine's detail screen")
+        XCTAssertTrue(badge.waitForExistence(timeout: 30), "price wasn't looked up automatically")
+        XCTAssertFalse(app.alerts["Couldn't fetch price"].exists)
         snapshot("10-score-badge-detail")
+
+        // A List renders lazily, so the Value section has to be scrolled into
+        // view before its provenance line exists to query.
+        let provenance = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From '")).firstMatch
+        reveal(provenance)
+        XCTAssertTrue(provenance.exists, "no provenance line for the fetched price")
+        snapshot("09-price-refreshed")
 
         app.navigationBars.buttons["Cellar"].tap()
         let rowBadge = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Score '")).firstMatch

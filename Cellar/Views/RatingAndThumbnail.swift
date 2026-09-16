@@ -44,6 +44,8 @@ struct StarsInline: View {
 struct ScoreBadge: View {
     let score: Int
     var compact = false
+    /// Hero treatment, for the top of a wine's own screen.
+    var large = false
 
     private var tint: Color {
         switch score {
@@ -54,13 +56,18 @@ struct ScoreBadge: View {
         }
     }
 
+    private var font: Font {
+        if large { return .title2.weight(.bold) }
+        return compact ? .caption2.weight(.bold) : .subheadline.weight(.bold)
+    }
+
     var body: some View {
         Text("\(score)")
-            .font(compact ? .caption2.weight(.bold) : .subheadline.weight(.bold))
+            .font(font)
             .monospacedDigit()
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 6 : 9)
-            .padding(.vertical, compact ? 2 : 4)
+            .padding(.horizontal, large ? 14 : (compact ? 6 : 9))
+            .padding(.vertical, large ? 7 : (compact ? 2 : 4))
             .background(tint, in: Capsule())
             .accessibilityLabel("Score \(score) out of 100")
     }
