@@ -11,6 +11,7 @@ final class ValuationServiceTests: XCTestCase {
           "max": 220.00,
           "currency": "USD",
           "score": 95,
+          "source": "vivino",
           "offers": [
             { "merchant": "Wine Library", "price": 175.00, "currency": "USD",
               "url": "https://example.com/x", "address": "123 Main St",
@@ -24,6 +25,7 @@ final class ValuationServiceTests: XCTestCase {
         XCTAssertEqual(dto.average, Decimal(string: "189.00"))
         XCTAssertEqual(dto.currency, "USD")
         XCTAssertEqual(dto.score, 95)
+        XCTAssertEqual(dto.source, "vivino")
         XCTAssertEqual(dto.offers?.count, 2)
         XCTAssertEqual(dto.offers?.first?.merchant, "Wine Library")
         XCTAssertEqual(dto.offers?.first?.latitude, 41.03)
@@ -37,6 +39,8 @@ final class ValuationServiceTests: XCTestCase {
         let dto = try JSONDecoder().decode(RemoteValuationDTO.self, from: json)
         XCTAssertEqual(dto.average, Decimal(50))
         XCTAssertNil(dto.offers)
+        // An older proxy omits the source; the client falls back to its own tag.
+        XCTAssertNil(dto.source)
     }
 
     func testUnconfiguredEndpointIsNotConfigured() {

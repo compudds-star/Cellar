@@ -39,6 +39,9 @@ struct RemoteValuationDTO: Decodable {
     /// Label image URL.
     var image: String?
     var offers: [OfferDTO]?
+    /// Which provider actually priced the wine ("vivino", "wine-searcher", …).
+    /// Older proxies omit it; `sourceName` is the fallback.
+    var source: String?
 
     struct OfferDTO: Decodable {
         var merchant: String
@@ -68,7 +71,7 @@ struct RemoteValuationClient: ValuationService, PurchaseService {
                                minPrice: dto.min,
                                maxPrice: dto.max,
                                currency: dto.currency ?? "USD",
-                               source: sourceName,
+                               source: dto.source ?? sourceName,
                                score: dto.score,
                                imageURL: dto.image)
     }
