@@ -1,3 +1,5 @@
 node_modules/
 .env
 *.log
+cache.json
+cache.json.tmp

@@ -162,6 +162,22 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
   `max` stays empty (neither actor quotes a range) and online offers are thin;
   nearby stores come from MapKit on the phone. Repeats are cached for 7 days.
 
+## Cache
+
+Results are cached for `CACHE_TTL_SECONDS` (7 days, matching the app's own
+per-wine TTL) and written to `CACHE_FILE` (default `./cache.json`), so a restart
+or redeploy doesn't re-scrape — and re-pay for — every wine. Writes are debounced
+2 s and atomic (temp file + rename), the file is also flushed on SIGTERM/SIGINT,
+and entries past their TTL are dropped when it's loaded. A cache file that can't
+be read or written is never fatal: the proxy logs it and runs from memory. Set
+`CACHE_FILE=""` for memory only.
+
+Refreshing the whole cellar on a schedule is usually the wrong trade: a lookup
+costs ~$0.004 (Vivino) plus up to ~$0.025 (Wine-Searcher), so re-pricing every
+wine every 6 days runs to roughly $0.15 per wine per month against Apify's $5
+free tier — about 30 wines' worth. Wine prices don't move that fast; on-demand
+lookups plus this cache are cheaper and fresh enough.
+
   Not `abotapi~wine-searcher-scraper`: its own README says Wine-Searcher accepts
   only residential connections, so it needs Apify Residential (Starter plan or
   higher) and fails every lookup on the free plan with an HTTP 400.

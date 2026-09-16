@@ -10,6 +10,7 @@
 // See README.md for deployment.
 
 import express from "express";
+import { readFileSync, writeFileSync, renameSync } from "fs";
 
 const {
   PORT = "8787",
@@ -24,6 +25,7 @@ const {
   WS_GRACE_SECONDS = "6",            // how long a lookup waits for the critic score
   WS_TIMEOUT_SECONDS = "110",        // how long that half runs before giving up
   CACHE_TTL_SECONDS = "604800",      // 7 days — matches the app's per-wine TTL
+  CACHE_FILE = "./cache.json",       // survives restarts; "" keeps the cache in memory only
   RATE_LIMIT_PER_MIN = "60",
 } = process.env;
 
@@ -60,16 +62,65 @@ function rateLimited(ip) {
   return rec.count > RATE_LIMIT;
 }
 
-// ---- Tiny in-memory response cache ------------------------------------------
+// ---- Response cache, persisted so a restart doesn't re-scrape everything ----
+// A cold lookup costs ~30 s and a few tenths of a cent, so losing the cache to a
+// container restart is worth avoiding. Writes are debounced and atomic (temp
+// file + rename), and a cache that can't be read or written is never fatal —
+// the proxy just runs from memory.
 const cache = new Map(); // key -> { at, body }
 function cacheGet(key) {
   const rec = cache.get(key);
   if (rec && Date.now() - rec.at < CACHE_TTL_MS) return rec.body;
-  if (rec) cache.delete(key);
+  if (rec) {
+    cache.delete(key);
+    saveCacheSoon();
+  }
   return null;
 }
 function cacheSet(key, body) {
   cache.set(key, { at: Date.now(), body });
+  saveCacheSoon();
+}
+
+function loadCache() {
+  if (!CACHE_FILE) return;
+  try {
+    const stored = JSON.parse(readFileSync(CACHE_FILE, "utf8"));
+    let expired = 0;
+    for (const [key, rec] of Object.entries(stored)) {
+      if (rec && typeof rec.at === "number" && Date.now() - rec.at < CACHE_TTL_MS) cache.set(key, rec);
+      else expired += 1;
+    }
+    console.log(`cache: loaded ${cache.size} entries (${expired} expired)`);
+  } catch (err) {
+    if (err?.code !== "ENOENT") console.error("cache load failed:", err?.message || "error");
+  }
+}
+
+let saveTimer = null;
+function saveCacheNow() {
+  if (!CACHE_FILE) return;
+  saveTimer = null;
+  try {
+    const tmp = `${CACHE_FILE}.tmp`;
+    writeFileSync(tmp, JSON.stringify(Object.fromEntries(cache)));
+    renameSync(tmp, CACHE_FILE);   // atomic: a crash mid-write can't truncate the cache
+  } catch (err) {
+    console.error("cache save failed:", err?.message || "error");
+  }
+}
+/// Coalesce the writes from a burst of lookups into one.
+function saveCacheSoon() {
+  if (!CACHE_FILE || saveTimer) return;
+  saveTimer = setTimeout(saveCacheNow, 2000);
+  saveTimer.unref?.();           // never hold the process open just to save
+}
+
+for (const signal of ["SIGTERM", "SIGINT"]) {
+  process.on(signal, () => {
+    saveCacheNow();              // a restart keeps whatever the last lookups found
+    process.exit(0);
+  });
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER }));
@@ -438,6 +489,7 @@ function merchantName(url) {
 }
 function avg(arr) { return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100; }
 
+loadCache();
 app.listen(Number(PORT), HOST, () => {
   console.log(`cellar-proxy listening on http://${HOST}:${PORT} (provider=${PROVIDER})`);
 });
