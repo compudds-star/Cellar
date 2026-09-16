@@ -173,10 +173,10 @@ struct WineRow: View {
         // Top-aligned so the name stays level with the top of the label, whatever
         // the rating column adds below it.
         HStack(alignment: .top, spacing: 12) {
-            // The critic score sits under the label; your own stars stay down in
-            // the row's bottom line.
+            // A larger label than a thumbnail, with the critic score under it.
             VStack(spacing: 5) {
-                WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type)
+                WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type,
+                              width: 72, height: 96)
                 if let score = wine.communityScore {
                     ScoreBadge(score: score)
                 }
