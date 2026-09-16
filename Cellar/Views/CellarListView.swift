@@ -178,7 +178,7 @@ struct WineRow: View {
                 WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type,
                               width: 72, height: 116)
                 if let score = wine.communityScore {
-                    ScoreBadge(score: score)
+                    ScoreBadge(score: score, large: true)
                 }
             }
             VStack(alignment: .leading, spacing: 3) {
