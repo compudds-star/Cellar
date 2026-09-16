@@ -34,6 +34,10 @@ struct AddWineFlow: View {
     @State private var storageLocation = ""
     @State private var drinkFromText = ""
     @State private var drinkToText = ""
+    /// The window we suggested from the vintage. Kept so a later edit to the
+    /// wine can replace our own suggestion without overwriting a year the user
+    /// typed themselves.
+    @State private var suggestedWindow: DrinkWindow?
 
     @State private var showingScanner = false
     @State private var showingLWIN = false
@@ -56,6 +60,26 @@ struct AddWineFlow: View {
     private var canSave: Bool {
         !producer.trimmingCharacters(in: .whitespaces).isEmpty
         || !name.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// True while the drink-window fields still hold exactly what we suggested,
+    /// so the caption explains a suggestion and never the user's own years.
+    private var showingSuggestedWindow: Bool {
+        guard let window = suggestedWindow else { return false }
+        return drinkFromText == String(window.from) && drinkToText == String(window.to)
+    }
+
+    /// Fill the drink window from the vintage. Runs whenever the details that
+    /// feed the estimate change, but only over blank fields or its own last
+    /// suggestion — a year the user typed is never overwritten.
+    private func suggestDrinkWindow() {
+        let blank = drinkFromText.isEmpty && drinkToText.isEmpty
+        guard blank || showingSuggestedWindow else { return }
+        let window = DrinkWindowEstimate.window(vintage: vintageInt, type: type,
+                                                varietal: varietal, region: region, country: country)
+        drinkFromText = window.map { String($0.from) } ?? ""
+        drinkToText = window.map { String($0.to) } ?? ""
+        suggestedWindow = window
     }
 
     var body: some View {
@@ -187,6 +211,10 @@ struct AddWineFlow: View {
                         TextField("Drink to (year)", text: $drinkToText)
                             .keyboardType(.numberPad)
                     }
+                    if showingSuggestedWindow {
+                        Text("Estimated peak for the style — edit if you disagree.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 }
 
@@ -194,8 +222,14 @@ struct AddWineFlow: View {
                     TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...5)
                 }
             }
+            // Suggest a drink window as soon as there's a vintage to count from.
+            .onChange(of: vintageText) { suggestDrinkWindow() }
+            .onChange(of: varietal) { suggestDrinkWindow() }
+            .onChange(of: region) { suggestDrinkWindow() }
+            .onChange(of: country) { suggestDrinkWindow() }
             // Follow the type's default size (750 mL wine, 1 L spirits) until the user picks one.
             .onChange(of: type) { oldType, newType in
+                suggestDrinkWindow()
                 if size == BottleSize.defaultSize(for: oldType) {
                     size = BottleSize.defaultSize(for: newType)
                 }

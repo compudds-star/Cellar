@@ -119,6 +119,12 @@ struct BottleEditorView: View {
                 if bottle == nil, draft.collection == nil {
                     draft.collection = CollectionMemory.defaultCollection(in: context)
                 }
+                // …and with the drink window the vintage suggests, left editable.
+                if bottle == nil, draft.drinkFromText.isEmpty, draft.drinkToText.isEmpty,
+                   let window = DrinkWindowEstimate.window(for: wine) {
+                    draft.drinkFromText = String(window.from)
+                    draft.drinkToText = String(window.to)
+                }
             }
             .navigationTitle(bottle == nil ? "Add bottles" : "Edit bottle")
             .navigationBarTitleDisplayMode(.inline)

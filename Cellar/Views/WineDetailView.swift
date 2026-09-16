@@ -34,6 +34,9 @@ struct WineDetailView: View {
                 detailRow("Region", [wine.region, wine.country].filter { !$0.isEmpty }.joined(separator: ", "))
                 detailRow("Type", wine.type.label)
                 detailRow("Vintage", wine.vintage.map(String.init) ?? "NV")
+                if let window = DrinkWindowEstimate.window(for: wine) {
+                    detailRow("Peak drinking", window.label)
+                }
                 detailRow("LWIN", wine.lwin11 ?? wine.lwin7 ?? "")
             }
 
