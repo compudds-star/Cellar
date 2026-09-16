@@ -129,12 +129,19 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
   request params and response field names against your Wine-Searcher API docs**
   and adjust the mapping marked `ADJUST` in `server.js` — their exact schema
   isn't public, so the adapter maps common field names best-effort.
-- `PROVIDER=apify` — set `APIFY_TOKEN`. Uses the `abotapi~wine-searcher-scraper`
-  actor (from ~$1.50 per 1,000 wines found; runs on Apify's free plan). The proxy
-  sends a Wine-Searcher URL with the market (e.g. `/usa`) for local merchants,
-  keeps 750 mL bottles and per-bottle case prices, and converts the returned EUR
-  prices with ECB rates (frankfurter.app). Cold lookups take ~5–35 s; repeats
-  are cached for 7 days.
+- `PROVIDER=apify` — set `APIFY_TOKEN`. Uses the `mrbridge~vivino-wine-data-scraper`
+  actor (~$0.003 per wine; runs on Apify's free plan with no residential proxy).
+  The proxy sends the producer + cuvée (plus the vintage when known) and, for a
+  longer name, a producer-only variant in the same run — Vivino's own names often
+  differ from the label ("Yellow Label" is listed as "Carte Jaune"), and an
+  unmatched query returns nothing. It ranks the candidates by the actor's
+  `matchScore` with an exact vintage match on top, breaking ties by rating count, scales 700 mL / 750 mL / 1 L prices to a standard bottle and
+  drops formats that don't scale (half bottles, magnums), converts a non-matching
+  currency with ECB rates (frankfurter.app), and maps Vivino's 1–5 community
+  rating onto the app's 100-point score. Vivino quotes one price and at most one
+  merchant per wine, so `min`/`max` come back empty and "Where to buy" shows a
+  single online link — nearby stores come from MapKit on the phone. Cold lookups
+  take ~10–25 s; repeats are cached for 7 days.
 
 ## Security notes
 

@@ -19,7 +19,7 @@ const {
   WS_API_URL = "",                   // Wine-Searcher API base (from their docs)
   WS_API_KEY = "",                   // Wine-Searcher API key (secret)
   APIFY_TOKEN = "",                  // Apify token (secret)
-  APIFY_ACTOR = "abotapi~wine-searcher-scraper",
+  APIFY_ACTOR = "mrbridge~vivino-wine-data-scraper",
   CACHE_TTL_SECONDS = "604800",      // 7 days — matches the app's per-wine TTL
   RATE_LIMIT_PER_MIN = "60",
 } = process.env;
@@ -105,8 +105,8 @@ async function lookup(params) {
 }
 
 // The app's contract. Every adapter returns this shape.
-function contract({ average = null, min = null, max = null, currency = "USD", score = null, image = null, offers = [] }) {
-  return { average, min, max, currency, score, image, offers };
+function contract({ average = null, min = null, max = null, currency = "USD", score = null, image = null, offers = [], source = null }) {
+  return { average, min, max, currency, score, image, offers, source };
 }
 
 // ---- Mock: deterministic fake data so the app works end-to-end today --------
@@ -128,7 +128,7 @@ function lookupMock({ q, lwin, currency }) {
     inStock: true,
   }));
   const image = "https://placehold.co/240x320.png?text=" + encodeURIComponent(q || lwin || "Wine");
-  return contract({ average: avg, min, max, currency, score, image, offers });
+  return contract({ average: avg, min, max, currency, score, image, offers, source: "mock" });
 }
 
 // ---- Wine-Searcher adapter --------------------------------------------------
@@ -171,6 +171,7 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
     score: num(priceInfo.score ?? j?.score ?? j?.wine_score),
     image: priceInfo.image ?? j?.image ?? j?.image_url ?? null,
     offers,
+    source: "wine-searcher",
   });
   // Set DEBUG_UPSTREAM=1 to see the raw provider JSON alongside the mapped
   // result, so you can correct the field paths above for your API's response.
@@ -178,33 +179,47 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
   return out;
 }
 
-// ---- Apify adapter (abotapi~wine-searcher-scraper, pay-per-result) ----------
-// Field names verified against live runs (2026-09-13). The actor scrapes a
-// Wine-Searcher /find page: the location segment in the URL picks that market's
-// merchants, but prices come back in the proxy exit country's currency (EUR in
-// practice), so they're converted to the requested currency with ECB rates.
-// Works on Apify's free plan. The token goes in a header, never the URL.
-const APIFY_MARKET = { USD: "usa", GBP: "uk", CAD: "canada", AUD: "australia" };
+// ---- Apify adapter (mrbridge~vivino-wine-data-scraper, pay-per-result) ------
+// Field names verified against live runs (2026-09-16). The actor searches
+// Vivino by wine name and returns a row per candidate match, carrying that
+// vintage's community rating and one retail price. It runs on Apify's free
+// plan without residential proxies — the previous Wine-Searcher actor needed
+// them and refused every lookup without them. The token goes in a header.
+//
+// Trade-off: Vivino gives a single price and at most one merchant link per
+// wine, not a list of offers, so "Where to buy" is thin online. Nearby stores
+// come from MapKit on the phone and are unaffected.
+const APIFY_MARKET = {
+  USD: "US", GBP: "GB", CAD: "CA", AUD: "AU", NZD: "NZ", EUR: "FR", CHF: "CH", SEK: "SE",
+};
 
 async function lookupApify({ q, lwin, vintage, currency }) {
   if (!APIFY_TOKEN) throw new Error("apify not configured");
+  // The actor searches by name and has no LWIN input; the app always sends a
+  // name next to the code, so a code-only lookup means something upstream broke.
+  if (!q) throw new Error("apify needs a wine name");
+
+  const wanted = /^\d{4}$/.test(vintage) ? Number(vintage) : null;
+  const market = APIFY_MARKET[currency] ?? "US";
+
+  // Vivino's own name for a wine is often not what's on the label — Veuve
+  // Clicquot "Yellow Label" is listed as "Brut (Carte Jaune)" — and a query the
+  // actor can't match returns nothing at all. Sending a producer-only variant
+  // (the first two words) in the same run rescues those misses for the price of
+  // one extra result, and the ranking below still prefers the full-name hits.
+  const full = wanted ? `${q} ${wanted}` : q;
+  const words = q.split(/\s+/).filter(Boolean);
+  const wines = words.length > 2 ? [full, words.slice(0, 2).join(" ")] : [full];
   const input = {
-    fetchOffers: true,
-    maxItems: 1,
-    proxy: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"], apifyProxyCountry: "US" },
+    wines,
+    searchMode: "auto",
+    matchingMode: "advanced",
+    includeTasteProfile: false,
+    includeReviews: false,
+    countryCode: market,
+    shipTo: market,
+    currencyCode: currency,
   };
-  // Prefer the name: the app's bundled LWIN sample codes are illustrative.
-  if (q) {
-    const slug = q.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, "+");
-    const parts = [slug, /^\d{4}$/.test(vintage) ? vintage : "1"]; // "1" = any vintage (NV)
-    if (APIFY_MARKET[currency]) parts.push(APIFY_MARKET[currency]);
-    input.inputType = "urls";
-    input.urls = [`https://www.wine-searcher.com/find/${parts.join("/")}`];
-  } else {
-    input.inputType = "lwins";
-    input.lwins = [lwin];
-  }
 
   const r = await fetch(`https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items`, {
     method: "POST",
@@ -214,62 +229,79 @@ async function lookupApify({ q, lwin, vintage, currency }) {
   });
   if (!r.ok) throw new Error("apify http " + r.status);
   const items = await r.json();
-  const first = Array.isArray(items) ? items[0] ?? {} : {};
-  const baseCurrency = first.avgPriceCurrency ?? first.cheapestPriceCurrency ?? currency;
 
-  // Per-750 mL comparisons: 750 mL, 700 mL and 1 L bottles (and cases of them)
-  // are scaled to a 750 mL price; half bottles, magnums, 1.75 L handles and other
-  // formats are skipped because their per-mL prices don't scale linearly.
-  // Labels seen: "Bottle (750ml)", "1ltr", "1.75ltr", "Case of 6x 1ltr", "Case of 12 Btls".
-  const unitOf = (o) => {
-    const d = String(o.unitDescription ?? "").toLowerCase();
-    const caseMatch = /case of (\d+)/.exec(d);
-    const count = Number(caseMatch?.[1] ?? o.bottlesPerUnit ?? 1) || 1;
-    const vol = /(\d+(?:\.\d+)?)\s*(ml|cl|ltr|litre|liter|l)\b/.exec(d);
-    let ml = 750;                                    // no size given: a standard bottle
-    if (vol) ml = Number(vol[1]) * ({ ml: 1, cl: 10 }[vol[2]] ?? 1000);
-    else if (d && !caseMatch) return null;           // unrecognized single format
+  // Per-750 mL comparisons: 700 mL, 750 mL and 1 L scale to a standard bottle;
+  // half bottles, magnums and other formats don't scale linearly, so their
+  // prices are dropped rather than extrapolated. No size stated = a bottle.
+  const priceOf = (it) => {
+    const p = num(it.price);
+    if (p === null) return null;
+    const ml = num(it.bottle_volume_ml) ?? 750;
     if (![700, 750, 1000].some((v) => Math.abs(ml - v) < 5)) return null;
-    return { count, ml };
+    return { amount: p, ml, currency: it.currency || currency };
   };
-  const offers = [];
-  for (const o of Array.isArray(first.offers) ? first.offers : []) {
-    const unit = unitOf(o);
-    const p = num(o.price);
-    if (!unit || p === null) continue;
-    const rate = await fxRate(o.priceCurrency ?? baseCurrency, currency);
-    offers.push({
-      merchant: o.merchant ?? "Merchant",
-      price: money((p / unit.count) * (750 / unit.ml) * rate),
-      currency,
-      url: o.merchantUrl ?? first.wineSearcherUrl ?? null,
-      address: null,
-      latitude: null,
-      longitude: null,
-      inStock: o.availability ? /instock/i.test(o.availability) : true,
-    });
-  }
-  const prices = offers.filter((o) => o.inStock).map((o) => o.price);
 
-  const baseRate = await fxRate(baseCurrency, currency);
-  const convert = (v) => (v === null ? null : money(v * baseRate));
+  // A search that finds nothing still emits one placeholder row named
+  // "Not found" with every field null — drop those so they can't be ranked.
+  const found = (Array.isArray(items) ? items : [])
+    .filter((it) => it && it.vivino_url && !/^not found$/i.test(String(it.name ?? "")));
 
-  // The app shows scores on the 100-point scale.
-  let score = num(first.score);
-  const best = num(first.scoreBestRating);
-  if (score !== null && best && best !== 100) score = Math.round((score / best) * 100);
+  // One search can return several candidates — "Opus One" also matches that
+  // winery's "Overture". matchScore is the actor's own name-similarity rank;
+  // the requested vintage outranks it, and a usable bottle size breaks ties.
+  // A non-vintage request should land on a non-vintage bottle, and among
+  // equally good names the one the most people have rated is the one on the
+  // shelf (the producer-only variant returns the winery's whole range at rank 1).
+  const ranked = found
+    .map((it) => ({
+      it,
+      rank: (num(it.matchScore) ?? 0)
+        + (wanted !== null && num(it.vintage) === wanted ? 10 : 0)
+        + (wanted === null && it.vintage === null ? 2 : 0)
+        + (priceOf(it) ? 1 : 0),
+      ratings: num(it.ratings_count) ?? 0,
+    }))
+    .sort((a, b) => b.rank - a.rank || b.ratings - a.ratings);
+  const best = ranked[0]?.it;
+  if (!best) return contract({ currency, source: "vivino" });
+
+  const priced = priceOf(best);
+  const price = priced
+    ? money(priced.amount * (750 / priced.ml) * await fxRate(priced.currency, currency))
+    : null;
+
+  // The app shows scores on the 100-point scale; Vivino rates out of 5. Prefer
+  // this vintage's rating, fall back to the wine's across vintages, and ignore
+  // a rating backed by only a handful of reviews.
+  const vintageStars = (num(best.ratings_count) ?? 0) >= 3 ? num(best.average_rating) : null;
+  const wineStars = (num(best.wine_ratings_count) ?? 0) >= 3 ? num(best.wine_average_rating) : null;
+  const stars = vintageStars ?? wineStars;
+
+  // Vivino links at most one merchant, and only when it quoted a price.
+  const offers = price !== null && best.merchant_url ? [{
+    merchant: merchantName(best.merchant_url),
+    price,
+    currency,
+    url: best.merchant_url,
+    address: null,
+    latitude: null,
+    longitude: null,
+    inStock: true,
+  }] : [];
 
   const out = contract({
-    average: convert(num(first.avgPrice) ?? num(first.medianPriceAmount)) ?? (prices.length ? avg(prices) : null),
-    min: prices.length ? Math.min(...prices) : convert(num(first.cheapestPriceAmount)),
-    // The actor's highestPriceAmount includes large formats, so only offers count.
-    max: prices.length ? Math.max(...prices) : null,
+    average: price,
+    // A single quote is not a range, so min/max stay empty rather than
+    // repeating the average back as if it were a spread.
+    min: null,
+    max: null,
     currency,
-    score,
-    image: first.labelImageUrl ?? null,
+    score: stars === null ? null : Math.round(stars * 20),
+    image: best.image_url ?? best.label_image_url ?? null,
     offers,
+    source: "vivino",
   });
-  if (process.env.DEBUG_UPSTREAM === "1") out._raw = first;
+  if (process.env.DEBUG_UPSTREAM === "1") out._raw = best;
   return out;
 }
 
@@ -301,6 +333,9 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 function money(n) { return Math.round(n * 100) / 100; }
+function merchantName(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "Merchant"; }
+}
 function avg(arr) { return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 100) / 100; }
 
 app.listen(Number(PORT), HOST, () => {
