@@ -38,6 +38,14 @@ final class LWINMatcherTests: XCTestCase {
         XCTAssertTrue(m.match(producer: "Nonexistent Winery", name: "Zzzzz").isEmpty)
     }
 
+    func testSearchBarRecognisesLWINCodes() {
+        XCTAssertEqual(LWINMatchView.lwinCode(in: "1012361"), "1012361")
+        XCTAssertEqual(LWINMatchView.lwinCode(in: "10123612015"), "1012361")
+        XCTAssertNil(LWINMatchView.lwinCode(in: "2015"))
+        XCTAssertNil(LWINMatchView.lwinCode(in: "Chateau Margaux"))
+        XCTAssertNil(LWINMatchView.lwinCode(in: ""))
+    }
+
     func testLWIN11Composition() {
         XCTAssertEqual(LWINMatcher.lwin11(lwin7: "9000007", vintage: 2015), "90000072015")
         XCTAssertEqual(LWINMatcher.lwin11(lwin7: "9000015", vintage: nil), "90000151000") // NV → 1000

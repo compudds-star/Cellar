@@ -1,7 +1,10 @@
 import SwiftUI
 
 /// Presents ranked LWIN candidates for the current label fields and returns the
-/// one the user picks. Loading the database is done off the main thread.
+/// one the user picks. The search bar starts with the label's producer and name;
+/// editing it (fixing a misread word, say) re-matches without leaving the sheet.
+/// A 7- or 11-digit LWIN finds that wine directly. Loading and matching run off
+/// the main thread.
 struct LWINMatchView: View {
     let producer: String
     let name: String
@@ -13,17 +16,25 @@ struct LWINMatchView: View {
     @State private var matches: [LWINMatch] = []
     @State private var loading = true
     @State private var usingSample = false
+    @State private var query = ""
+    @State private var didSeedQuery = false
+
+    /// The label's own fields, as first shown in the search bar.
+    private var initialQuery: String {
+        [producer, name].map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                if loading {
+                if loading && matches.isEmpty {
                     HStack { ProgressView(); Text("Matching…") }
                 } else if matches.isEmpty {
                     ContentUnavailableView {
                         Label("No LWIN match", systemImage: "questionmark.circle")
                     } description: {
-                        Text("Edit the producer or name and try again.")
+                        Text("Check the spelling in the search bar, or search by producer alone.")
                     }
                 } else {
                     ForEach(matches) { m in
@@ -62,21 +73,58 @@ struct LWINMatchView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            .task { await run() }
+            .searchable(text: $query,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Producer, wine, or LWIN")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onAppear {
+                if !didSeedQuery { query = initialQuery; didSeedQuery = true }
+            }
+            .task(id: query) { await run() }
         }
     }
 
     private func run() async {
+        guard didSeedQuery else { return }
         let db = LWINDatabase.shared
-        await withCheckedContinuation { cont in
+        let firstRun = !db.isLoaded
+        // Let typing settle before re-matching; a new keystroke cancels this task.
+        if !firstRun && query != initialQuery {
+            try? await Task.sleep(for: .milliseconds(250))
+            if Task.isCancelled { return }
+        }
+        loading = true
+        let text = query.trimmingCharacters(in: .whitespaces)
+        let useLabelFields = text == initialQuery
+        let (producer, name, region, vintage) = (producer, name, region, vintage)
+        let found: [LWINMatch] = await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 db.loadIfNeeded()
-                cont.resume()
+                let matcher = LWINMatcher(database: db)
+                if let code = Self.lwinCode(in: text) {
+                    let hits = db.records.filter { $0.lwin7 == code }
+                        .map { LWINMatch(record: $0, score: 1, rank: 1) }
+                    cont.resume(returning: hits)
+                } else if useLabelFields {
+                    // The label's fields, split as scanned: also scores the producer alone.
+                    cont.resume(returning: matcher.bestMatches(
+                        producer: producer, name: name, region: region, vintage: vintage))
+                } else {
+                    cont.resume(returning: matcher.match(
+                        producer: text, name: "", region: region, vintage: vintage))
+                }
             }
         }
-        matches = LWINMatcher(database: db)
-            .bestMatches(producer: producer, name: name, region: region, vintage: vintage)
+        if Task.isCancelled { return }
+        matches = found
         usingSample = db.usingSampleData
         loading = false
+    }
+
+    /// The 7-digit wine code from a typed LWIN7 or LWIN11, if that's what the query is.
+    static func lwinCode(in text: String) -> String? {
+        guard text.allSatisfy(\.isNumber), text.count == 7 || text.count == 11 else { return nil }
+        return String(text.prefix(7))
     }
 }
