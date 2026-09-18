@@ -550,6 +550,16 @@ final class CellarSmokeUITests: XCTestCase {
         let rowBadge = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Score '")).firstMatch
         XCTAssertTrue(rowBadge.waitForExistence(timeout: 5), "no score badge in the list row")
         snapshot("11-score-badge-list")
+
+        // The bottom bar re-prices the whole cellar at once.
+        clearCellarSearch()
+        let refreshAll = app.toolbars.buttons["Refresh Prices"]
+        XCTAssertTrue(refreshAll.waitForExistence(timeout: 5), "no Refresh Prices button in the bottom bar")
+        refreshAll.tap()
+        let status = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Updated '")).firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 60), "refresh-all never finished")
+        XCTAssertFalse(app.alerts["Couldn't refresh prices"].exists)
+        snapshot("13-refreshed-all-prices")
     }
 
     private func proxyIsRunning() -> Bool {

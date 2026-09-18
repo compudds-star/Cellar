@@ -13,6 +13,8 @@ struct CellarListView: View {
     @State private var scope: CollectionScope = .all
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<UUID>()
+    @State private var lastRefresh: PriceLookup.BulkResult?
+    @State private var refreshError: String?
     @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
 
     private var filtered: [Wine] {
@@ -33,6 +35,11 @@ struct CellarListView: View {
     /// In-stock bottles of the selected wines that a move would take (within the collection filter).
     private var selectedBottleCount: Int {
         selectedWines.reduce(0) { $0 + $1.inStockBottles(in: scope).count }
+    }
+
+    /// Wines whose bottles make up the cellar value shown (respects the collection filter).
+    private var pricedWines: [Wine] {
+        wines.filter { !$0.isWishlist && !$0.inStockBottles(in: scope).isEmpty }
     }
 
     private var cellarTotal: Decimal {
@@ -126,6 +133,19 @@ struct CellarListView: View {
                         Label("Settings", systemImage: "gearshape")
                     }
                 }
+                if !editMode.isEditing, wines.contains(where: { !$0.isWishlist }) {
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        Button {
+                            Task { await refreshAllPrices() }
+                        } label: {
+                            Label("Refresh Prices", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(PriceLookup.shared.bulkProgress != nil || pricedWines.isEmpty)
+                        Spacer()
+                        refreshStatus
+                        Spacer()
+                    }
+                }
                 if editMode.isEditing {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Text("\(selection.count) wine\(selection.count == 1 ? "" : "s") · \(selectedBottleCount) bottle\(selectedBottleCount == 1 ? "" : "s")")
@@ -152,10 +172,56 @@ struct CellarListView: View {
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
             }
+            .alert("Couldn't refresh prices",
+                   isPresented: Binding(get: { refreshError != nil }, set: { if !$0 { refreshError = nil } })) {
+                Button("OK") { refreshError = nil }
+            } message: {
+                Text(refreshError ?? "")
+            }
             // Rebuild drink-window reminders when the cellar's composition changes.
             .task(id: wines.count) {
                 await DrinkWindowNotifier.rescheduleAll(for: wines)
             }
+        }
+    }
+
+    /// Status line in the bottom bar: live progress, the last run's outcome, or how old the prices are.
+    @ViewBuilder
+    private var refreshStatus: some View {
+        Group {
+            if let progress = PriceLookup.shared.bulkProgress {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Updating \(min(progress.done + 1, progress.total)) of \(progress.total)…")
+                }
+            } else if let result = lastRefresh {
+                Text("Updated \(result.updated) of \(result.total) wine\(result.total == 1 ? "" : "s")"
+                     + (result.failed > 0 ? " · \(result.failed) failed" : ""))
+            } else if let oldest = pricedWines.compactMap({ $0.latestValuation }).filter({ $0.source != "manual" }).map(\.asOf).min() {
+                Text("Prices from \(oldest.formatted(.relative(presentation: .named)))")
+            } else {
+                Text("No online prices yet")
+            }
+        }
+        .font(.footnote).foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    /// Re-prices every wine counted in the cellar value; the total updates as results arrive.
+    private func refreshAllPrices() async {
+        guard ValuationCoordinator.isConfigured else {
+            refreshError = ValuationError.notConfigured.errorDescription
+            return
+        }
+        lastRefresh = nil
+        do {
+            let result = try await PriceLookup.shared.refreshAll(pricedWines, context: context)
+            lastRefresh = result
+            if result.total > 0, result.failed == result.total {
+                refreshError = result.firstError
+            }
+        } catch {
+            refreshError = (error as? ValuationError)?.errorDescription ?? error.localizedDescription
         }
     }
 

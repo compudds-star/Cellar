@@ -98,6 +98,64 @@ final class PriceLookup {
         shared.run(wine, context: context, force: force)
     }
 
+    /// Progress of a "Refresh all prices" run; nil when none is running.
+    private(set) var bulkProgress: (done: Int, total: Int)?
+
+    struct BulkResult: Equatable {
+        var updated = 0
+        var noData = 0
+        var failed = 0
+        var firstError: String?
+        var total: Int { updated + noData + failed }
+    }
+
+    /// Re-prices every given wine, ignoring the 7-day cache, a few at a time so a
+    /// big cellar doesn't flood the endpoint. Snapshots are persisted as they
+    /// arrive, so cellar totals update live. Throws only when no endpoint is set.
+    func refreshAll(_ wines: [Wine], context: ModelContext, concurrency: Int = 3) async throws -> BulkResult {
+        guard ValuationCoordinator.isConfigured else { throw ValuationError.notConfigured }
+        guard bulkProgress == nil else { return BulkResult() }
+        let queue = wines.filter { !inFlight.contains($0.id) }
+        bulkProgress = (0, queue.count)
+        defer { bulkProgress = nil }
+
+        var result = BulkResult()
+        var next = 0
+        await withTaskGroup(of: (updated: Bool, error: String?).self) { @MainActor group in
+            func addNext() {
+                guard next < queue.count else { return }
+                let wine = queue[next]
+                next += 1
+                group.addTask { @MainActor in
+                    self.inFlight.insert(wine.id)
+                    defer { self.inFlight.remove(wine.id) }
+                    do {
+                        return (try await ValuationCoordinator.refresh(wine, context: context, force: true), nil)
+                    } catch {
+                        return (false, error.localizedDescription)
+                    }
+                }
+            }
+            for _ in 0..<max(1, concurrency) { addNext() }
+            for await outcome in group {
+                if let error = outcome.error {
+                    result.failed += 1
+                    if result.firstError == nil { result.firstError = error }
+                } else if outcome.updated {
+                    result.updated += 1
+                } else {
+                    result.noData += 1
+                }
+                bulkProgress?.done += 1
+                addNext()
+            }
+        }
+        do { try context.save() } catch {
+            Self.log.error("Saving refreshed prices failed: \(error.localizedDescription, privacy: .public)")
+        }
+        return result
+    }
+
     private func run(_ wine: Wine, context: ModelContext, force: Bool) {
         guard inFlight.insert(wine.id).inserted else { return }
         Task {
