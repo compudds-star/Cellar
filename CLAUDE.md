@@ -76,8 +76,8 @@ Cellar/                      app source (Swift)
 │                            clients; ValuationConfig (endpoint in UserDefaults, API key
 │                            in Keychain); ValuationCoordinator (7-day cache, persists
 │                            snapshots + offers) + PriceLookup (automatic lookup when
-│                            wines/bottles are added; refreshAll behind the Cellar list's
-│                            bottom-bar "Refresh Prices"); CellarStats (pure aggregation)
+│                            wines/bottles are added; refreshAll behind "Refresh Prices"
+│                            under the Cellar list's value); CellarStats (pure aggregation)
 ├── Purchase/               MerchantOffer, NearbyStores (MapKit + one-shot location)
 ├── Export/                 CSV + PDF exporters
 ├── Notifications/          DrinkWindowNotifier (local notifications)

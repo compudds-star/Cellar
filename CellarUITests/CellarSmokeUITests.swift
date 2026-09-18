@@ -551,10 +551,10 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(rowBadge.waitForExistence(timeout: 5), "no score badge in the list row")
         snapshot("11-score-badge-list")
 
-        // The bottom bar re-prices the whole cellar at once.
+        // "Refresh Prices" under the cellar value re-prices the whole cellar at once.
         clearCellarSearch()
-        let refreshAll = app.toolbars.buttons["Refresh Prices"]
-        XCTAssertTrue(refreshAll.waitForExistence(timeout: 5), "no Refresh Prices button in the bottom bar")
+        let refreshAll = app.buttons["Refresh Prices"]
+        XCTAssertTrue(refreshAll.waitForExistence(timeout: 5), "no Refresh Prices button under the cellar value")
         refreshAll.tap()
         let status = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Updated '")).firstMatch
         XCTAssertTrue(status.waitForExistence(timeout: 60), "refresh-all never finished")

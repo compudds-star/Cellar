@@ -42,6 +42,11 @@ struct CellarListView: View {
         wines.filter { !$0.isWishlist && !$0.inStockBottles(in: scope).isEmpty }
     }
 
+    /// In-stock bottles of the wines listed (within the collection filter).
+    private var bottleCount: Int {
+        filtered.reduce(0) { $0 + $1.inStockBottles(in: scope).count }
+    }
+
     private var cellarTotal: Decimal {
         CellarStats(wines: wines.filter { !$0.isWishlist }, scope: scope).totalValue
     }
@@ -69,11 +74,17 @@ struct CellarListView: View {
                             // No delete buttons while selecting, so a mis-tap can't delete a wine.
                             .onDelete(perform: editMode.isEditing ? nil : delete)
                         } header: {
-                            HStack {
-                                Text("\(filtered.count) wines")
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(filtered.count) wine\(filtered.count == 1 ? "" : "s")")
+                                    Text("\(bottleCount) bottle\(bottleCount == 1 ? "" : "s")")
+                                }
                                 Spacer()
-                                Text("\(scope == .all ? "Cellar" : scope.title) value \(Money.string(cellarTotal))")
-                                    .fontWeight(.semibold)
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text("\(scope == .all ? "Cellar" : scope.title) value \(Money.string(cellarTotal))")
+                                        .fontWeight(.semibold)
+                                    refreshControl
+                                }
                             }
                         }
                     }
@@ -133,19 +144,6 @@ struct CellarListView: View {
                         Label("Settings", systemImage: "gearshape")
                     }
                 }
-                if !editMode.isEditing, wines.contains(where: { !$0.isWishlist }) {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button {
-                            Task { await refreshAllPrices() }
-                        } label: {
-                            Label("Refresh Prices", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(PriceLookup.shared.bulkProgress != nil || pricedWines.isEmpty)
-                        Spacer()
-                        refreshStatus
-                        Spacer()
-                    }
-                }
                 if editMode.isEditing {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Text("\(selection.count) wine\(selection.count == 1 ? "" : "s") · \(selectedBottleCount) bottle\(selectedBottleCount == 1 ? "" : "s")")
@@ -185,7 +183,22 @@ struct CellarListView: View {
         }
     }
 
-    /// Status line in the bottom bar: live progress, the last run's outcome, or how old the prices are.
+    /// "Refresh Prices" plus its status, under the cellar value.
+    private var refreshControl: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Button {
+                Task { await refreshAllPrices() }
+            } label: {
+                Label("Refresh Prices", systemImage: "arrow.clockwise")
+                    .font(.footnote.weight(.semibold))
+            }
+            .disabled(PriceLookup.shared.bulkProgress != nil || pricedWines.isEmpty)
+            refreshStatus
+        }
+        .textCase(nil)
+    }
+
+    /// Status line under the button: live progress, the last run's outcome, or how old the prices are.
     @ViewBuilder
     private var refreshStatus: some View {
         Group {
@@ -205,6 +218,7 @@ struct CellarListView: View {
         }
         .font(.footnote).foregroundStyle(.secondary)
         .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     /// Re-prices every wine counted in the cellar value; the total updates as results arrive.
