@@ -183,13 +183,14 @@ struct CellarListView: View {
         }
     }
 
-    /// "Refresh Prices" plus its status, under the cellar value.
+    /// Refresh arrow and its status on one line, under the cellar value.
     private var refreshControl: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        HStack(spacing: 8) {
             Button {
                 Task { await refreshAllPrices() }
             } label: {
                 Label("Refresh Prices", systemImage: "arrow.clockwise")
+                    .labelStyle(.iconOnly)
                     .font(.footnote.weight(.semibold))
             }
             .disabled(PriceLookup.shared.bulkProgress != nil || pricedWines.isEmpty)
