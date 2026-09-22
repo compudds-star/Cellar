@@ -21,7 +21,7 @@ struct InviteFriendView: View {
     private var shareText: String {
         guard let link else { return "" }
         return """
-        Here's the setup for Cellar's wine pricing. On your iPhone, with Cellar \
+        Here's the setup for Vino Cellar's wine pricing. On your iPhone, with Vino Cellar \
         installed, open this link (or scan the picture):
 
         \(link.absoluteString)
@@ -46,7 +46,7 @@ struct InviteFriendView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                     } footer: {
-                        Text("Point their camera at this code, and their Cellar asks before it accepts it.")
+                        Text("Point their camera at this code, and their copy of Vino Cellar asks before it accepts it.")
                     }
 
                     Section {

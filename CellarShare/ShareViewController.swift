@@ -79,7 +79,7 @@ final class ShareImportModel: ObservableObject {
             try SharedImportStore.save(item, imageData: imageData)
             return true
         } catch {
-            self.error = "Couldn't save for Cellar: \(error.localizedDescription)"
+            self.error = "Couldn't save for Vino Cellar: \(error.localizedDescription)"
             return false
         }
     }
@@ -162,7 +162,7 @@ struct ShareImportView: View {
                         Text(error).foregroundStyle(.red)
                     }
                     Section {
-                        Text("It's added the next time you open Cellar, which also looks up its price.")
+                        Text("It's added the next time you open Vino Cellar, which also looks up its price.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }

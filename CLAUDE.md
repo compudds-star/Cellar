@@ -1,6 +1,7 @@
-# Cellar — project guide for Claude Code
+# Vino Cellar — project guide for Claude Code
 
-iPhone wine-cellar app: scan a bottle label (or type it), keep a cellar
+iPhone wine-cellar app, shipped as **"Vino Cellar"** (`CFBundleDisplayName`;
+the bundle id, targets and product name stay `Cellar`): scan a bottle label (or type it), keep a cellar
 database, total each wine's and the whole cellar's estimated value, find where
 to buy (online offers + nearby stores with directions), tasting notes, wishlist,
 export, and drink-window reminders.

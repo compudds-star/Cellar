@@ -12,53 +12,46 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<!-- What people see on the home screen and in Settings. "Cellar" alone was
+	     taken on the App Store; the bundle id, target and product name stay as
+	     they are, since changing those would move the app group, the keychain
+	     items and the entitlements for no user-visible gain. -->
+	<key>CFBundleDisplayName</key>
+	<string>Vino Cellar</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<!-- Camera: required for live label scanning (VisionKit DataScanner). -->
-	<key>NSCameraUsageDescription</key>
-	<string>Cellar uses the camera to scan or photograph a bottle's label and read its name, producer, and vintage.</string>
-	<!-- Photo library: optional path to run OCR on a picture you already took. -->
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cellar can read a wine label from a photo you choose from your library.</string>
-	<!-- When-in-use location: only to find wine stores near you and give
-	     directions. Cellar does not track you and stores no location history. -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Cellar uses your location only to find nearby wine stores that carry a bottle and give directions. Your location is never stored or shared.</string>
-	<!-- Local network: only to reach a development pricing proxy on your Mac over
-	     Wi-Fi. iOS asks once before the app can connect to a LAN address. -->
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Cellar connects to a pricing server on your local network to look up wine prices.</string>
-	<!-- One-tap setup links: cellar://configure?endpoint=…&amp;token=… point the app
-	     at a pricing server without anyone typing a URL into Settings. The app
-	     always asks before accepting one. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
-			<key>CFBundleURLName</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>cellar</string>
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<!-- Allow cleartext ONLY to local hosts (a dev pricing proxy on your Mac at
-	     http://127.0.0.1). Real remote endpoints still require HTTPS under ATS. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<!-- Required for native full-screen layout; without it iOS runs the app
-	     letterboxed at a legacy 320x480 size. Empty dict = plain system background. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Vino Cellar uses the camera to scan or photograph a bottle's label and read its name, producer, and vintage.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Vino Cellar connects to a pricing server on your local network to look up wine prices.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Vino Cellar uses your location only to find nearby wine stores that carry a bottle and give directions. Your location is never stored or shared.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Vino Cellar can read a wine label from a photo you choose from your library.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

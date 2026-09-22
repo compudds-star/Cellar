@@ -47,7 +47,7 @@ struct RootTabView: View {
             }
             Button("Not now", role: .cancel) { invite = nil }
         } message: { pending in
-            Text("Cellar will look up prices at \(pending.host)\(pending.token == nil ? "" : ", using the access token in this link"). Your wines, bottles and notes stay on this phone either way. You can change or clear this in Settings.")
+            Text("Vino Cellar will look up prices at \(pending.host)\(pending.token == nil ? "" : ", using the access token in this link"). Your wines, bottles and notes stay on this phone either way. You can change or clear this in Settings.")
         }
         .alert("Pricing is set up",
                isPresented: Binding(get: { inviteApplied != nil }, set: { if !$0 { inviteApplied = nil } })) {

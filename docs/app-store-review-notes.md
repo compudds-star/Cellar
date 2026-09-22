@@ -1,7 +1,7 @@
 # App Store review notes
 
 Paste the block below into **App Store Connect → App Review Information → Notes**
-when submitting. It exists because Cellar talks to a pricing server the developer
+when submitting. It exists because Vino Cellar talks to a pricing server the developer
 runs, and a reviewer who doesn't know that could mistake a capped or offline
 lookup for a broken feature.
 
@@ -18,7 +18,7 @@ curl -s https://cellar.orangeeaglesa.com/health
 No account, login, or setup is required. The app works fully on first launch.
 
 ONLINE PRICING
-Cellar estimates bottle values through a pricing service the developer hosts. No
+Vino Cellar estimates bottle values through a pricing service the developer hosts. No
 credentials are needed — the app is preconfigured and the service allows a limited
 number of lookups per device. To see it: Cellar tab → + → type any wine (e.g.
 producer "Opus One", vintage 2018) → Save. An estimated value appears on the wine

@@ -1,6 +1,6 @@
 # Cellar pricing proxy
 
-A ~200-line Node service that sits between the Cellar app and a wine-pricing
+A ~200-line Node service that sits between the Vino Cellar app and a wine-pricing
 provider. It:
 
 - serves `GET /valuation` in the **exact JSON contract** the app expects;
