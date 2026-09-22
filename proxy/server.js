@@ -36,6 +36,8 @@ const {
   MAX_DEVICES = "10",                // how many installs may self-enrol
   ALLOW_UNKNOWN_DEVICES = "1",       // 0 = only ids already in the file may look up
   REQUIRE_DEVICE = "0",              // 1 = reject requests with no device header
+  EXCLUDE_NON_RETAIL = "1",          // drop auction houses, exchanges and funds from prices
+  NON_RETAIL_PATTERN = "",           // override the built-in list (a JS regex source)
   OWNER_DEVICE = "",                 // this id is enrolled unlimited on startup
   ADMIN_TOKEN = "",                  // bearer token for GET /admin/devices
 } = process.env;
@@ -515,7 +517,8 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
     longitude: num(o.longitude ?? o.lng ?? o.lon),
     inStock: o.in_stock ?? o.available ?? true,
   }));
-  const prices = offers.map((o) => o.price).filter((n) => typeof n === "number");
+  const retail = retailOnly(offers);
+  const prices = retail.map((o) => o.price).filter((n) => typeof n === "number");
   const out = contract({
     average: num(priceInfo.average ?? priceInfo.average_price) ?? (prices.length ? avg(prices) : null),
     min: num(priceInfo.min ?? priceInfo.min_price) ?? (prices.length ? Math.min(...prices) : null),
@@ -523,7 +526,7 @@ async function lookupWineSearcher({ q, lwin, vintage, currency }) {
     currency,
     score: num(priceInfo.score ?? j?.score ?? j?.wine_score),
     image: priceInfo.image ?? j?.image ?? j?.image_url ?? null,
-    offers,
+    offers: retail,
     source: "wine-searcher",
   });
   // Set DEBUG_UPSTREAM=1 to see the raw provider JSON alongside the mapped
@@ -612,7 +615,7 @@ function mergeApify({ vivino, ws, currency }) {
     currency,
     score: ws?.score ?? vivino?.score ?? null,
     image: vivino?.image ?? ws?.image ?? null,
-    offers: [...(ws?.offers ?? []), ...(vivino?.offers ?? [])],
+    offers: retailOnly([...(ws?.offers ?? []), ...(vivino?.offers ?? [])]),
     source: [ws && "wine-searcher", vivino && "vivino"].filter(Boolean).join(" + ") || null,
   });
 }
@@ -730,6 +733,14 @@ async function lookupWineSearcherActor({ q, vintage, currency }) {
     if (raw !== null) cheapest = money(raw * await fxRate(f.cheapestPriceCurrency || currency, currency));
   }
 
+  // The cheapest listing is exactly the one most likely to be an auction lot or
+  // an exchange quote, so if it is, there is no usable retail price here — drop
+  // the price rather than pass off something nobody can buy at. The critic score
+  // is unaffected and still comes back.
+  if (isNonRetail(f.cheapestPriceMerchant)) {
+    return { average: null, min: null, score: num(f.score), image: null, offers: [], _raw: f };
+  }
+
   const offers = cheapest !== null && f.cheapestPriceMerchant ? [{
     merchant: f.cheapestPriceMerchant,
     price: cheapest,
@@ -750,6 +761,30 @@ async function lookupWineSearcherActor({ q, vintage, currency }) {
     _raw: f,
   };
 }
+
+// ---- Non-retail sellers ------------------------------------------------------
+// Auction houses, trading exchanges and investment funds quote prices a person
+// can't actually buy a single bottle at — a hammer price excludes the buyer's
+// premium, and an exchange quote is a trade price. Reporting either as "what
+// this is worth" is misleading, so they are dropped from the prices and from
+// the offers list. Set EXCLUDE_NON_RETAIL=0 to keep them, or replace the list
+// with NON_RETAIL_PATTERN.
+const NON_RETAIL = new RegExp(
+  NON_RETAIL_PATTERN ||
+  [
+    "auction", "auctioneer", "bonhams", "christie", "sotheby", "acker",
+    "zachys", "hart davis", "winebid", "idealwine", "ideal wine",
+    "spectrum wine", "baghera", "steinfels", "catawiki",
+    "livetrade", "live trade", "cultx", "cult x", "liv-ex", "livex",
+    "bordeaux index", "exchange", "wine fund", "winefund", "investment",
+  ].join("|"),
+  "i");
+
+const isNonRetail = (merchant) =>
+  EXCLUDE_NON_RETAIL === "1" && NON_RETAIL.test(String(merchant ?? ""));
+
+/// Offers a person could actually buy from.
+const retailOnly = (offers) => (offers ?? []).filter((o) => !isNonRetail(o.merchant));
 
 // ---- Currency conversion (ECB reference rates via frankfurter.app, no key) ----
 const fxCache = new Map(); // "EUR>USD" -> { rate, at }
