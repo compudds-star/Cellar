@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Charts
 
 private struct ExportItem: Identifiable {
     let id = UUID()
@@ -154,15 +153,7 @@ struct StatsSummarySections: View {
 
         if !stats.byType.isEmpty {
             Section("Value by type") {
-                Chart(stats.byType, id: \.type) { entry in
-                    BarMark(
-                        x: .value("Value", (entry.value as NSDecimalNumber).doubleValue),
-                        y: .value("Type", entry.type.label))
-                    .annotation(position: .trailing) {
-                        Text(Money.string(entry.value)).font(.caption2)
-                    }
-                }
-                .frame(height: CGFloat(stats.byType.count) * 44 + 20)
+                ValueByTypeBars(entries: stats.byType)
             }
         }
     }
@@ -173,5 +164,42 @@ struct StatsSummarySections: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// Value per type as horizontal bars. Laid out by hand rather than with Swift Charts
+/// so each type's name, bar, and amount always sit on the same line, at any width.
+private struct ValueByTypeBars: View {
+    let entries: [(type: WineType, value: Decimal, bottles: Int)]
+
+    private func amount(_ value: Decimal) -> Double { (value as NSDecimalNumber).doubleValue }
+    private var largest: Double { max(entries.map { amount($0.value) }.max() ?? 0, 0.01) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(entries, id: \.type) { entry in
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(entry.type.label).font(.subheadline)
+                        Text("\(entry.bottles) bottle\(entry.bottles == 1 ? "" : "s")")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Text(Money.string(entry.value))
+                            .font(.subheadline.weight(.semibold)).monospacedDigit()
+                    }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.secondary.opacity(0.15))
+                            // A sliver keeps a small-but-real value visible.
+                            Capsule().fill(entry.type.tint)
+                                .frame(width: max(geo.size.width * amount(entry.value) / largest,
+                                                  amount(entry.value) > 0 ? 3 : 0))
+                        }
+                    }
+                    .frame(height: 8)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
