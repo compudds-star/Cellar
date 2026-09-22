@@ -5,6 +5,10 @@ enum ValuationError: LocalizedError {
     case insecureEndpoint
     case badResponse
     case http(Int)
+    /// The pricing server's per-device cap for today/this month is used up.
+    case quotaExceeded
+    /// The pricing server no longer accepts this install.
+    case accessRevoked
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +20,10 @@ enum ValuationError: LocalizedError {
             return "The pricing service returned an unexpected response."
         case .http(let code):
             return "The pricing service returned an error (HTTP \(code))."
+        case .quotaExceeded:
+            return "You've used this device's price lookups for now — prices already fetched still work, and the limit resets shortly."
+        case .accessRevoked:
+            return "This device's access to the pricing server was turned off. Ask whoever runs it to re-enable it."
         }
     }
 }
@@ -112,7 +120,13 @@ struct RemoteValuationClient: CombinedValuationService {
         guard let request = try makeRequest(for: wine) else { return nil }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ValuationError.badResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ValuationError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            switch http.statusCode {
+            case 429: throw ValuationError.quotaExceeded
+            case 403: throw ValuationError.accessRevoked
+            default: throw ValuationError.http(http.statusCode)
+            }
+        }
         return try JSONDecoder().decode(RemoteValuationDTO.self, from: data)
     }
 
@@ -143,6 +157,10 @@ struct RemoteValuationClient: CombinedValuationService {
         if let key = config.apiKey, !key.isEmpty {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
+        // Which install is asking, so the endpoint's owner can see and cap usage
+        // per person. An opaque id for this install — never a name or a device
+        // fingerprint, and never anything about what is in the cellar.
+        request.setValue(DeviceIdentity.current, forHTTPHeaderField: "X-Cellar-Device")
         return request
     }
 }

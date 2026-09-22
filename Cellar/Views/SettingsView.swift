@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var apiKeyText = ""
     @State private var hasStoredKey = APIKeyStore.hasKey
     @State private var invalidURL = false
+    @State private var copiedID = false
+    private let deviceID = DeviceIdentity.current
 
     var body: some View {
         NavigationStack {
@@ -66,6 +68,23 @@ struct SettingsView: View {
                 Section {
                     Text("Prices are cached per wine for 7 days, so a paid API is hit at most once per wine per week.")
                         .font(.caption).foregroundStyle(.secondary)
+                } footer: {
+                    // Deliberately quiet rather than hidden: when lookups stop working
+                    // the first question is "what's your device id?", and neither side
+                    // can answer that about an invisible field.
+                    HStack(spacing: 6) {
+                        Text("Device ID")
+                        Text(deviceID).monospaced()
+                        Button {
+                            UIPasteboard.general.string = deviceID
+                            copiedID = true
+                        } label: {
+                            Image(systemName: copiedID ? "checkmark" : "doc.on.doc")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Copy device ID")
+                    }
+                    .font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Settings")

@@ -78,4 +78,51 @@ final class ValuationServiceTests: XCTestCase {
         let cfg = ValuationConfig(baseURL: URL(string: "https://host.example.com/api"), apiKey: "k")
         XCTAssertTrue(cfg.isConfigured)
     }
+
+    // MARK: - Device identity and one-tap setup
+
+    func testDeviceIdShapeIsShortAndUnambiguous() {
+        let id = DeviceIdentity.make()
+        XCTAssertEqual(id.count, 6)                       // "Ryc#j0"
+        XCTAssertEqual(Array(id)[3], "#")
+        XCTAssertTrue(DeviceIdentity.isValid(id))
+        // No characters that get misread when someone reads their id out loud.
+        XCTAssertFalse(id.contains(where: { "0O1lI".contains($0) }))
+        // Distinct ids for distinct installs.
+        let many = Set((0..<200).map { _ in DeviceIdentity.make() })
+        XCTAssertGreaterThan(many.count, 190)
+    }
+
+    func testDeviceIdValidationMatchesWhatTheProxyAccepts() {
+        XCTAssertTrue(DeviceIdentity.isValid("Ryc#j0"))
+        XCTAssertTrue(DeviceIdentity.isValid("owner_phone-2"))
+        XCTAssertFalse(DeviceIdentity.isValid("ab"))                       // too short
+        XCTAssertFalse(DeviceIdentity.isValid(String(repeating: "a", count: 33)))
+        XCTAssertFalse(DeviceIdentity.isValid("has space"))
+        XCTAssertFalse(DeviceIdentity.isValid("semi;colon"))
+    }
+
+    func testConfigureLinkParsesEndpointAndToken() throws {
+        let url = try XCTUnwrap(URL(string: "cellar://configure?endpoint=https://prices.example.com&token=abc123"))
+        let invite = try XCTUnwrap(ValuationConfig.invite(from: url))
+        XCTAssertEqual(invite.endpoint.absoluteString, "https://prices.example.com")
+        XCTAssertEqual(invite.token, "abc123")
+        XCTAssertEqual(invite.host, "prices.example.com")
+
+        // A link with no token is fine — the proxy may not require one.
+        let noToken = try XCTUnwrap(URL(string: "cellar://configure?endpoint=https://prices.example.com"))
+        XCTAssertNil(try XCTUnwrap(ValuationConfig.invite(from: noToken)).token)
+    }
+
+    func testConfigureLinkRejectsAnythingTheAppWouldNotDialAnyway() {
+        // Cleartext to a public host — the same rule the Settings field enforces.
+        XCTAssertNil(ValuationConfig.invite(from: URL(string: "cellar://configure?endpoint=http://evil.example.com")!))
+        // Wrong scheme, wrong action, missing endpoint.
+        XCTAssertNil(ValuationConfig.invite(from: URL(string: "https://configure?endpoint=https://a.example.com")!))
+        XCTAssertNil(ValuationConfig.invite(from: URL(string: "cellar://reset?endpoint=https://a.example.com")!))
+        XCTAssertNil(ValuationConfig.invite(from: URL(string: "cellar://configure")!))
+        // A LAN proxy is still allowed, as it is when typed by hand.
+        XCTAssertNotNil(ValuationConfig.invite(from: URL(string: "cellar://configure?endpoint=http://192.168.1.20:8787")!))
+    }
+
 }

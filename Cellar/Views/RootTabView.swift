@@ -5,6 +5,8 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var importing = false
     @State private var importMessage: String?
+    @State private var invite: ValuationConfig.Invite?
+    @State private var inviteApplied: String?
 
     var body: some View {
         TabView {
@@ -27,6 +29,31 @@ struct RootTabView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await importSharedWines() } }
+        }
+        // Setup in one tap: cellar://configure?endpoint=…&token=… fills in the
+        // pricing server so nobody has to type a URL into Settings. Always asks
+        // first — a link can come from anywhere, and it decides where this phone
+        // sends its wine lookups.
+        .onOpenURL { url in
+            if let parsed = ValuationConfig.invite(from: url) { invite = parsed }
+        }
+        .alert("Use this pricing server?",
+               isPresented: Binding(get: { invite != nil }, set: { if !$0 { invite = nil } }),
+               presenting: invite) { pending in
+            Button("Use \(pending.host)") {
+                ValuationConfig.apply(pending)
+                inviteApplied = pending.host
+                invite = nil
+            }
+            Button("Not now", role: .cancel) { invite = nil }
+        } message: { pending in
+            Text("Cellar will look up prices at \(pending.host)\(pending.token == nil ? "" : ", using the access token in this link"). Your wines, bottles and notes stay on this phone either way. You can change or clear this in Settings.")
+        }
+        .alert("Pricing is set up",
+               isPresented: Binding(get: { inviteApplied != nil }, set: { if !$0 { inviteApplied = nil } })) {
+            Button("OK") { inviteApplied = nil }
+        } message: {
+            Text("Prices will be looked up at \(inviteApplied ?? "") from now on.")
         }
         .alert("Added from another app",
                isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {

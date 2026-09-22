@@ -17,6 +17,42 @@ struct ValuationConfig {
         ValuationConfig(baseURL: ValuationSettings.baseURL, apiKey: APIKeyStore.load())
     }
 
+    /// A setup link — `cellar://configure?endpoint=…&token=…` — so handing the app
+    /// to someone is "tap this link", not "type a URL and a token into Settings".
+    /// Parsing only: nothing is stored until the person confirms the prompt, because
+    /// a link can come from anywhere and it decides where wine queries are sent.
+    struct Invite: Equatable {
+        var endpoint: URL
+        var token: String?
+
+        /// Host shown in the confirmation prompt.
+        var host: String { endpoint.host ?? endpoint.absoluteString }
+    }
+
+    /// Nil unless the link is a `configure` link carrying an endpoint the app would
+    /// accept anyway (HTTPS, or plain HTTP on a local network).
+    static func invite(from url: URL) -> Invite? {
+        guard url.scheme?.lowercased() == "cellar",
+              (url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+                  .lowercased() == "configure",
+              let comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        let items = comps.queryItems ?? []
+        func value(_ name: String) -> String? {
+            items.first { $0.name == name }?.value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let raw = value("endpoint"), !raw.isEmpty,
+              let endpoint = URL(string: raw),
+              isAcceptableEndpoint(endpoint) else { return nil }
+        let token = value("token")
+        return Invite(endpoint: endpoint, token: (token?.isEmpty ?? true) ? nil : token)
+    }
+
+    /// Applies a confirmed invite: endpoint to UserDefaults, token to the Keychain.
+    static func apply(_ invite: Invite) {
+        ValuationSettings.baseURL = invite.endpoint
+        if let token = invite.token { APIKeyStore.save(token) }
+    }
+
     /// Configured enough to attempt a lookup (endpoint present and acceptable).
     var isConfigured: Bool {
         guard let baseURL else { return false }
@@ -59,12 +95,21 @@ struct ValuationConfig {
 enum ValuationSettings {
     private static let baseURLKey = "valuation.baseURL"
 
+    /// Baked into the build so a new install already knows where to look up prices
+    /// — the endpoint is not a secret (the token is, and that is not in here).
+    /// Leave empty to ship an app that starts with online pricing off.
+    static let bundledBaseURL = ""
+
+    /// The endpoint in use. Never set → the bundled default; set to empty →
+    /// deliberately off, which is how someone turns pricing off for good.
     static var baseURL: URL? {
         get {
-            guard let s = UserDefaults.standard.string(forKey: baseURLKey), !s.isEmpty else { return nil }
-            return URL(string: s)
+            guard let s = UserDefaults.standard.string(forKey: baseURLKey) else {
+                return URL(string: bundledBaseURL)
+            }
+            return s.isEmpty ? nil : URL(string: s)
         }
-        set { UserDefaults.standard.set(newValue?.absoluteString, forKey: baseURLKey) }
+        set { UserDefaults.standard.set(newValue?.absoluteString ?? "", forKey: baseURLKey) }
     }
 }
 

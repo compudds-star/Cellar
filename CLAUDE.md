@@ -74,7 +74,10 @@ Cellar/                      app source (Swift)
 │                            inverted token index), LWINMatcher (scoring), LWINRecord
 ├── Valuation/              ValuationService/PurchaseService protocols; Manual + Remote
 │                            clients; ValuationConfig (endpoint in UserDefaults, API key
-│                            in Keychain); ValuationCoordinator (7-day cache, persists
+│                            in Keychain; `Invite` parses cellar://configure setup links);
+│                            DeviceIdentity (short per-install id in the Keychain, sent as
+│                            X-Cellar-Device so the proxy can meter/cap each friend);
+│                            ValuationCoordinator (7-day cache, persists
 │                            snapshots + offers) + PriceLookup (automatic lookup when
 │                            wines/bottles are added; refreshAll behind "Refresh Prices"
 │                            under the Cellar list's value); CellarStats (pure aggregation)
@@ -82,10 +85,14 @@ Cellar/                      app source (Swift)
 ├── Export/                 CSV + PDF exporters
 ├── Notifications/          DrinkWindowNotifier (local notifications)
 ├── Resources/lwin_sample.csv   20-wine sample (illustrative codes; replace with real)
-└── Views/                  RootTabView (Cellar/Wishlist/Value tabs), CellarListView,
+└── Views/                  RootTabView (Cellar/Wishlist/Drank/Value tabs; applies
+                            cellar://configure links), CellarListView (sections: a bold
+                            "Wine" heading over the styles, then each spirit), DrankView
+                            (wines with no stock left; back to cellar or wishlist),
                             WineDetailView, AddWineFlow, WishlistView, WhereToBuyView,
-                            CellarDashboardView (Swift Charts + export menu),
-                            SettingsView (new-bottle defaults: collection, wine/spirit sizes; pricing endpoint+key), LWINMatchView, ScanSheet,
+                            CellarDashboardView (value-by-type bars + export menu),
+                            SettingsView (new-bottle defaults: collection, wine/spirit sizes;
+                            pricing endpoint+key; device ID), LWINMatchView, ScanSheet,
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
                             BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
                             PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry),
@@ -115,6 +122,14 @@ proxy/                      Node 18+ pricing proxy for the user's Oracle host
   Keychain via `APIKeyStore`) — never in the bundle/Info.plist/logs. HTTPS is
   required except for localhost/`*.local`/private LAN IPs (dev proxy), matched
   by `NSAllowsLocalNetworking` in Info.plist.
+- **Sharing with friends:** cellars are private by construction (nothing leaves
+  the phone), so what needs metering is the shared provider bill. Each install
+  mints a short id (`Ryc#j0`) in its Keychain and sends it as `X-Cellar-Device`;
+  the proxy self-enrols it and caps billable lookups per device per day/month —
+  cache hits are free. Limits live in `proxy/devices.json`, re-read live.
+  Setup is a `cellar://configure?endpoint=…&token=…` link (`CFBundleURLTypes` in
+  Info.plist), which the app always confirms before applying. See
+  "Sharing the app with friends" in `proxy/README.md`.
 - **LWIN:** `Wine.lwin7` (7-digit wine identity) + `lwin11` (with vintage). The
   bundled `lwin_sample.csv` codes start at 9000001 and are **illustrative, not
   authoritative** — replace with the free Liv-ex LWIN database:
