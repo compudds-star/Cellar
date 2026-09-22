@@ -12,6 +12,8 @@ struct RootTabView: View {
                 .tabItem { Label("Cellar", systemImage: "square.grid.2x2") }
             WishlistView()
                 .tabItem { Label("Wishlist", systemImage: "star") }
+            DrankView()
+                .tabItem { Label("Drank", systemImage: "wineglass") }
             CellarDashboardView()
                 .tabItem { Label("Value", systemImage: "chart.pie") }
         }

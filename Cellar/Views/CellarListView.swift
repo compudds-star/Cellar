@@ -19,7 +19,8 @@ struct CellarListView: View {
 
     private var filtered: [Wine] {
         wines.filter { wine in
-            guard !wine.isWishlist else { return false }
+            // Wishlist wines and finished ones (no stock left) have their own tabs.
+            guard !wine.isWishlist, !wine.isDrank else { return false }
             let matchesType = typeFilter == nil || wine.type == typeFilter
             let matchesScope = scope == .all || !wine.inStockBottles(in: scope).isEmpty
             let matchesSearch = searchText.isEmpty
@@ -30,6 +31,34 @@ struct CellarListView: View {
         }
         .sorted(by: Wine.alphabeticalOrder)
     }
+
+    /// One section of the list. Wine styles (Red, White…) sit under a single bold
+    /// "Wine" heading carried by the first of them; each spirit is its own bold
+    /// heading. `categoryTitle` is set only on the section that carries the heading.
+    private struct Shelf: Identifiable {
+        let type: WineType
+        let wines: [Wine]
+        let categoryTitle: String?
+        var id: WineType { type }
+        var isWineStyle: Bool { !type.isSpirit }
+    }
+
+    /// Wine styles first in their usual order (Red, White, Rosé…), then the spirits
+    /// alphabetically. Producers are already in alphabetical order inside each.
+    private var shelves: [Shelf] {
+        let byType = Dictionary(grouping: filtered, by: \.type)
+        let styles = WineType.wines.filter { byType[$0] != nil }
+        let spirits = byType.keys.filter(\.isSpirit)
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        return styles.enumerated().map { index, type in
+            Shelf(type: type, wines: byType[type] ?? [], categoryTitle: index == 0 ? "Wine" : nil)
+        } + spirits.map { type in
+            Shelf(type: type, wines: byType[type] ?? [], categoryTitle: type.label)
+        }
+    }
+
+    /// Every listed wine (not spirit) — what the bold "Wine" heading counts.
+    private var wineStyleWines: [Wine] { filtered.filter { !$0.type.isSpirit } }
 
     private var selectedWines: [Wine] { filtered.filter { selection.contains($0.id) } }
     /// In-stock bottles of the selected wines that a move would take (within the collection filter).
@@ -54,7 +83,7 @@ struct CellarListView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if !wines.contains(where: { !$0.isWishlist }) {
+                if !wines.contains(where: { !$0.isWishlist && !$0.isDrank }) {
                     ContentUnavailableView {
                         Label("Your cellar is empty", systemImage: "wineglass")
                     } description: {
@@ -65,26 +94,22 @@ struct CellarListView: View {
                     }
                 } else {
                     List(selection: $selection) {
-                        Section {
-                            ForEach(filtered) { wine in
-                                NavigationLink(value: wine) {
-                                    WineRow(wine: wine, scope: scope)
+                        ForEach(Array(shelves.enumerated()), id: \.element.id) { index, shelf in
+                            Section {
+                                ForEach(shelf.wines) { wine in
+                                    NavigationLink(value: wine) {
+                                        WineRow(wine: wine, scope: scope)
+                                    }
                                 }
-                            }
-                            // No delete buttons while selecting, so a mis-tap can't delete a wine.
-                            .onDelete(perform: editMode.isEditing ? nil : delete)
-                        } header: {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(filtered.count) wine\(filtered.count == 1 ? "" : "s")")
-                                    Text("\(bottleCount) bottle\(bottleCount == 1 ? "" : "s")")
+                                // No delete buttons while selecting, so a mis-tap can't delete a wine.
+                                .onDelete(perform: editMode.isEditing ? nil : { delete(shelf.wines, at: $0) })
+                            } header: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    // The cellar summary rides on the first section's header.
+                                    if index == 0 { summaryHeader }
+                                    shelfHeader(shelf)
                                 }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("\(scope == .all ? "Cellar" : scope.title) value \(Money.string(cellarTotal))")
-                                        .fontWeight(.semibold)
-                                    refreshControl
-                                }
+                                .textCase(nil)
                             }
                         }
                     }
@@ -130,7 +155,7 @@ struct CellarListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if wines.contains(where: { !$0.isWishlist }) {
+                    if wines.contains(where: { !$0.isWishlist && !$0.isDrank }) {
                         Button(editMode.isEditing ? "Done" : "Select") {
                             withAnimation {
                                 editMode = editMode.isEditing ? .inactive : .active
@@ -181,6 +206,55 @@ struct CellarListView: View {
                 await DrinkWindowNotifier.rescheduleAll(for: wines)
             }
         }
+    }
+
+    /// Wine and bottle counts on the left, cellar value and the refresh control on the right.
+    private var summaryHeader: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(filtered.count) wine\(filtered.count == 1 ? "" : "s")")
+                Text("\(bottleCount) bottle\(bottleCount == 1 ? "" : "s")")
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(scope == .all ? "Cellar" : scope.title) value \(Money.string(cellarTotal))")
+                    .fontWeight(.semibold)
+                refreshControl
+            }
+        }
+    }
+
+    /// The bold category heading (only on the section that carries it) and, for wine,
+    /// the style underneath it.
+    @ViewBuilder
+    private func shelfHeader(_ shelf: Shelf) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let category = shelf.categoryTitle {
+                HStack(spacing: 6) {
+                    if !shelf.isWineStyle {
+                        Circle().fill(shelf.type.tint).frame(width: 8, height: 8)
+                    }
+                    Text(category).font(.headline.weight(.bold)).foregroundStyle(.primary)
+                    bottlesCaption(shelf.isWineStyle ? wineStyleWines : shelf.wines)
+                }
+            }
+            // Spirits are their own category, so the bold line already names them.
+            if shelf.isWineStyle {
+                HStack(spacing: 6) {
+                    Circle().fill(shelf.type.tint).frame(width: 8, height: 8)
+                    Text(shelf.type.label).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    bottlesCaption(shelf.wines)
+                }
+                .padding(.leading, 10)
+            }
+        }
+    }
+
+    /// "12 bottles" for a set of wines, counting only the collection in view.
+    private func bottlesCaption(_ wines: [Wine]) -> some View {
+        let bottles = wines.reduce(0) { $0 + $1.inStockBottles(in: scope).count }
+        return Text("\(bottles) bottle\(bottles == 1 ? "" : "s")")
+            .font(.caption).foregroundStyle(.secondary)
     }
 
     /// Refresh arrow and its status on one line, under the cellar value.
@@ -240,8 +314,8 @@ struct CellarListView: View {
         }
     }
 
-    private func delete(at offsets: IndexSet) {
-        for index in offsets { context.delete(filtered[index]) }
+    private func delete(_ wines: [Wine], at offsets: IndexSet) {
+        for index in offsets { context.delete(wines[index]) }
     }
 }
 
@@ -276,7 +350,13 @@ struct WineRow: View {
                     if let rating = wine.rating, rating > 0 {
                         StarsInline(rating: rating)
                     }
-                    if !wine.isWishlist {
+                    if wine.isDrank {
+                        Text("Drank").font(.caption).foregroundStyle(.secondary)
+                        if let date = wine.lastConsumedDate {
+                            Text("· \(date.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else if !wine.isWishlist {
                         Text("\(wine.inStockBottles(in: scope).count) in stock").font(.caption).foregroundStyle(.secondary)
                         if wine.hasValuation {
                             Text("· \(Money.string(wine.totalEstimatedValue(in: scope)))")

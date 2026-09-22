@@ -134,6 +134,23 @@ struct WineDetailView: View {
                         Label("Move to cellar", systemImage: "tray.and.arrow.down")
                     }
                 }
+            } else if wine.isDrank {
+                Section {
+                    Button {
+                        WishlistMove.toCellar(wine, context: context)
+                    } label: {
+                        Label("Bought another — move to cellar", systemImage: "tray.and.arrow.down")
+                    }
+                    Button {
+                        WishlistMove.toWishlist(wine)
+                    } label: {
+                        Label("Move to wishlist", systemImage: "star")
+                    }
+                } header: {
+                    Text("Drank")
+                } footer: {
+                    Text("Nothing left in stock, so this wine sits on the Drank tab with its notes and rating.")
+                }
             }
 
             Section("Tasting notes") {

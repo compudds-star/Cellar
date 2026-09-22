@@ -223,6 +223,36 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(wanted.inStockCount, 1)
     }
 
+    @MainActor
+    func testFinishedWineMovesToDrankAndBack() {
+        let wine = Wine(name: "Last One", producer: "Test", notes: "Delicious", rating: 5)
+        ctx.insert(wine)
+        let bottle = Bottle()
+        ctx.insert(bottle)
+        wine.bottles.append(bottle)
+        XCTAssertFalse(wine.isDrank)
+
+        bottle.status = .consumed
+        bottle.consumedDate = .now
+        XCTAssertTrue(wine.isDrank)                      // leaves the cellar on its own
+        XCTAssertNotNil(wine.lastConsumedDate)
+
+        // Bought another: back in the cellar with a fresh bottle, notes intact.
+        WishlistMove.toCellar(wine, context: ctx)
+        XCTAssertFalse(wine.isDrank)
+        XCTAssertEqual(wine.inStockCount, 1)
+        XCTAssertEqual(wine.bottles.count, 2)
+        XCTAssertEqual(wine.notes, "Delicious")
+        XCTAssertEqual(wine.rating, 5)
+
+        // Or onto the wishlist instead, which also takes it off the Drank tab.
+        for b in wine.bottles { b.status = .consumed }
+        XCTAssertTrue(wine.isDrank)
+        WishlistMove.toWishlist(wine)
+        XCTAssertFalse(wine.isDrank)
+        XCTAssertTrue(wine.isWishlist)
+    }
+
     func testTitleCasesExistingAllCapsNamesOnce() throws {
         let suite = "cleanup-test-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

@@ -277,6 +277,13 @@ final class Wine {
     var inStockBottles: [Bottle] { bottles.filter { $0.status.isInCellar } }
     var inStockCount: Int { inStockBottles.count }
 
+    /// Nothing left in stock: the wine leaves the Cellar tab for the Drank tab,
+    /// keeping its notes, rating, photo and prices until a bottle is added back.
+    var isDrank: Bool { !isWishlist && inStockCount == 0 }
+
+    /// When the last bottle was marked consumed, when that was recorded.
+    var lastConsumedDate: Date? { bottles.compactMap(\.consumedDate).max() }
+
     /// Total estimated value of the in-stock bottles of this wine.
     var totalEstimatedValue: Decimal {
         inStockBottles.reduce(Decimal(0)) { $0 + $1.estimatedValue(unitValue: estimatedUnitValue) }
