@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vino Cellar — Privacy Policy</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1d1b19; --muted: #6b6560; --rule: #e4dfd8;
+    --accent: #70102b; --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17151a; --fg: #ece8e4; --muted: #a29a94; --rule: #322d33;
+      --accent: #e0879c; --card: #201d23;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 42rem; margin: 0 auto; padding: 3rem 16px 5rem; }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .4rem; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 1.15rem; margin: 2.25rem 0 .6rem; letter-spacing: -0.01em;
+    color: var(--accent);
+  }
+  p, li { margin: .6rem 0; }
+  ul { padding-left: 1.2rem; }
+  .sub { color: var(--muted); font-size: .95rem; margin: 0; }
+  .lede {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 1rem 1.15rem; margin: 1.5rem 0 0;
+  }
+  .lede p { margin: .35rem 0; }
+  strong { font-weight: 650; }
+  code {
+    font: .88em ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--card); border: 1px solid var(--rule);
+    padding: .1em .35em; border-radius: 5px;
+  }
+  a { color: var(--accent); }
+  footer {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+    color: var(--muted); font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Privacy Policy</h1>
+    <p class="sub">Vino Cellar for iPhone · last updated 22 September 2026</p>
+  </header>
+
+  <div class="lede">
+    <p><strong>Your cellar stays on your phone.</strong> Vino Cellar has no account to
+    create and no servers holding your collection. Your wines, bottles, photos,
+    tasting notes and ratings are stored only on your device.</p>
+    <p>There is no analytics, no advertising, no tracking, and no third-party SDK of
+    any kind in the app.</p>
+  </div>
+
+  <h2>What stays on your device</h2>
+  <p>Everything you enter or capture: wines and bottles, quantities, prices paid,
+  storage locations, drink windows, tasting notes, ratings, wishlist, collections,
+  and any label photos you scan or choose. It lives in the app's own database,
+  protected by iOS file encryption, and is included in your device backup if you
+  back your iPhone up.</p>
+  <p>Deleting the app deletes that database.</p>
+
+  <h2>What leaves your device, and only if you ask for prices</h2>
+  <p>Online price estimates are optional. If a pricing service is configured
+  (Settings → Pricing endpoint), then when you add a wine or tap Refresh Prices the
+  app sends that service:</p>
+  <ul>
+    <li>the wine's producer, name and vintage, and its LWIN identifier if matched;</li>
+    <li>the currency you want prices in;</li>
+    <li>a random identifier for your installation, described below.</li>
+  </ul>
+  <p>It does not send your cellar, your quantities, your prices paid, your notes,
+  your ratings, your photos or your location. Clear the endpoint in Settings and
+  nothing leaves the device at all — the rest of the app keeps working.</p>
+
+  <h2>The installation identifier</h2>
+  <p>Each install generates a short random code such as <code>Ryc#j0</code>, stored in
+  your device's keychain and sent with price lookups. It exists so whoever runs the
+  pricing service can meter usage and stop one install from exhausting a paid API
+  allowance for everyone.</p>
+  <p>It is not derived from your device, your Apple Account or anything about you, and
+  it is not linked to a name, an email address or any other identifier. The pricing
+  service records only that code, a count of lookups, and when it was last seen. Note
+  that because it lives in the keychain, it survives deleting and reinstalling the
+  app; if you want the record removed, contact us and we'll delete it.</p>
+
+  <h2>Camera, photos and location</h2>
+  <ul>
+    <li><strong>Camera and photo library</strong> — used only to read a wine label.
+    Text recognition runs on your device; label images are never uploaded.</li>
+    <li><strong>Location</strong> — requested only when you ask for wine shops near
+    you. It is used to run a map search through Apple Maps and is never stored by us
+    or sent to our servers. Apple's handling of that search is covered by
+    <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>.</li>
+  </ul>
+
+  <h2>Sharing into the app</h2>
+  <p>When you share a page, link or photo to Vino Cellar from another app, that
+  content is written to a private folder shared between the app and its share
+  extension, and imported the next time you open the app. It is not transmitted
+  anywhere.</p>
+
+  <h2>Exports and notifications</h2>
+  <p>CSV and PDF exports are generated on your device and go wherever you choose to
+  send them. Drink-window reminders are local notifications scheduled on your device;
+  nothing about them is transmitted.</p>
+
+  <h2>Children</h2>
+  <p>Vino Cellar concerns alcoholic beverages and is not directed at children. It
+  collects nothing that would identify a person of any age.</p>
+
+  <h2>Data we sell or share</h2>
+  <p>None. There is nobody to sell it to — we do not hold your data. The pricing
+  service's provider receives only the wine name and vintage needed to answer a price
+  query.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the date at the top changes with it. Material changes
+  will be described in the app's release notes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions, or a request to delete an installation record:
+  <a href="mailto:info@orangeeaglesa.com">info@orangeeaglesa.com</a></p>
+
+  <footer>
+    <p>Vino Cellar · <a href="/support">Support</a></p>
+  </footer>
+</div>
+</body>
+</html>

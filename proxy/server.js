@@ -11,6 +11,8 @@
 
 import express from "express";
 import { readFileSync, writeFileSync, renameSync, statSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const {
   PORT = "8787",
@@ -326,6 +328,22 @@ loadDevices();
 if (OWNER_DEVICE && validDeviceId(OWNER_DEVICE) && !devices.get(OWNER_DEVICE)) {
   devices.set(OWNER_DEVICE, blankDevice({ name: "owner", dailyLimit: 0, monthlyLimit: 0 }));
   saveDevicesSoon();
+}
+
+// ---- Public pages -----------------------------------------------------------
+// The App Store listing needs a support URL and a privacy URL that stay up. They
+// are plain static HTML served from here so there is one host to keep alive, not
+// two. No cache headers beyond a short one: a privacy policy that can't be
+// corrected quickly is worse than one fetched twice.
+const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
+for (const [routes, file] of [[["/support", "/support.html"], "support.html"],
+                              [["/privacy", "/privacy.html", "/privacy-policy"], "privacy.html"]]) {
+  app.get(routes, (_req, res) => {
+    res.set("Cache-Control", "public, max-age=300");
+    res.sendFile(join(PUBLIC_DIR, file), (err) => {
+      if (err) res.status(500).type("text/plain").send("page unavailable");
+    });
+  });
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER }));

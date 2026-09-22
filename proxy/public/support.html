@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vino Cellar — Support</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --fg: #1d1b19; --muted: #6b6560; --rule: #e4dfd8;
+    --accent: #70102b; --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17151a; --fg: #ece8e4; --muted: #a29a94; --rule: #322d33;
+      --accent: #e0879c; --card: #201d23;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 42rem; margin: 0 auto; padding: 3rem 16px 5rem; }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 1.25rem; margin-bottom: 2rem; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .4rem; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 1.15rem; margin: 2.25rem 0 .6rem; letter-spacing: -0.01em;
+    color: var(--accent);
+  }
+  h3 { font-size: 1rem; margin: 1.4rem 0 .3rem; }
+  p, li { margin: .6rem 0; }
+  ul { padding-left: 1.2rem; }
+  .sub { color: var(--muted); font-size: .95rem; margin: 0; }
+  .contact {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 1rem 1.15rem; margin: 1.5rem 0 0;
+  }
+  .contact p { margin: .35rem 0; }
+  strong { font-weight: 650; }
+  a { color: var(--accent); }
+  code {
+    font: .88em ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--card); border: 1px solid var(--rule);
+    padding: .1em .35em; border-radius: 5px;
+  }
+  footer {
+    margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+    color: var(--muted); font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Vino Cellar Support</h1>
+    <p class="sub">Keep track of what's in your cellar, what it's worth, and when to drink it.</p>
+  </header>
+
+  <div class="contact">
+    <p><strong>Need help?</strong> Email <a href="mailto:info@orangeeaglesa.com">info@orangeeaglesa.com</a>.</p>
+    <p class="sub">Please include your app version and device ID — both are at the
+    bottom of Settings, and together they explain most problems in one reply.</p>
+  </div>
+
+  <h2>Getting started</h2>
+  <p>Tap <strong>+</strong> on the Cellar tab to add a bottle. You can scan the label
+  with the camera, pick a photo, or type the details in. Set how many bottles you
+  have, what you paid, and where they're stored; the app totals the value of the
+  whole cellar for you.</p>
+
+  <h2>Common questions</h2>
+
+  <h3>The app didn't read my label correctly</h3>
+  <p>Scanning works best on a flat, well-lit label with the text roughly horizontal.
+  Whatever it reads goes into the form as editable text, so you can correct it before
+  saving. On the simulator, or a device without a camera, use the photo picker
+  instead.</p>
+
+  <h3>Why doesn't my wine have a price?</h3>
+  <p>Price estimates are optional and come from a pricing service configured in
+  Settings. Without one, you can type your own estimate per 750&nbsp;mL and every
+  total still works. With one, a lookup runs when you add a wine, and results are
+  cached for seven days — tap <strong>Refresh Prices</strong> under the cellar value
+  to force a new one.</p>
+
+  <h3>It says I've used up my price lookups</h3>
+  <p>The pricing service limits how many lookups each install can make, so one person
+  can't exhaust the allowance for everyone. Prices already fetched keep working, and
+  the limit resets. If you need more, get in touch.</p>
+
+  <h3>What is LWIN?</h3>
+  <p>LWIN is Liv-ex's free wine identity database, bundled with the app (around
+  205,000 wines and spirits). Matching a wine to its LWIN code gives it a canonical
+  identity, which makes price lookups far more accurate. It's optional — the app
+  suggests a match and you confirm it.</p>
+
+  <h3>Where did my bottle go?</h3>
+  <p>When the last bottle of a wine is marked <strong>Consumed</strong>, the wine
+  moves to the <strong>Drank</strong> tab, keeping its notes, rating and photo. Swipe
+  it there to put it back in the cellar if you buy another, or onto the wishlist.</p>
+
+  <h3>Can I keep bottles in more than one place?</h3>
+  <p>Yes — create collections (Home, the beach house, a storage locker) and assign
+  bottles to them. The Value tab totals each collection separately.</p>
+
+  <h3>Can I get my data out?</h3>
+  <p>Yes. The Value tab's share button exports your whole cellar as CSV or as a PDF
+  summary. Your data is yours, and it never leaves your phone unless you send it
+  somewhere.</p>
+
+  <h3>Drink-window reminders</h3>
+  <p>Give a bottle a drink-from and drink-to year and the app schedules a local
+  notification when it enters its window. Allow notifications the first time you're
+  asked; you can change that later in iOS Settings.</p>
+
+  <h2>Privacy</h2>
+  <p>Your cellar never leaves your device. There are no accounts, no analytics and no
+  tracking. See the <a href="/privacy">privacy policy</a> for the details, including
+  exactly what a price lookup sends.</p>
+
+  <h2>Credits</h2>
+  <p>Wine identity data is the Liv-ex LWIN database, used under
+  <a href="https://creativecommons.org/licenses/by/4.0/">CC&nbsp;BY&nbsp;4.0</a>.</p>
+
+  <footer>
+    <p>Vino Cellar · <a href="/privacy">Privacy Policy</a></p>
+  </footer>
+</div>
+</body>
+</html>

@@ -110,7 +110,9 @@ Cellar/Import/              PendingImporter: app imports pending shares when it 
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv
-proxy/                      Node 18+ pricing proxy for the user's Oracle host
+proxy/                      Node 18+ pricing proxy for the user's Oracle host; also serves
+                            the App Store support and privacy pages from proxy/public/
+                            (https://cellar.orangeeaglesa.com/support and /privacy)
 ```
 
 ### Key design decisions
