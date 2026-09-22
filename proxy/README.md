@@ -215,6 +215,20 @@ provider credits (within their device's cap). If one gets out, rotate `PROXY_TOK
 four, which the 7-day cache means nobody legitimately needs to exceed. At the
 Vivino actor's ~$0.003/wine that is **~$0.90 per device per month worst case**.
 
+`GLOBAL_MONTHLY_LIMIT` is the one that matters if you run **without** a
+`PROXY_TOKEN` so anyone who installs the app just works (App Review included): a
+per-device cap alone doesn't bound the bill, because a fresh device id starts a
+fresh allowance. The service ceiling does.
+
+### Changing the caps from your phone
+
+Settings → tap the version line five times → **Server admin**. Paste `ADMIN_TOKEN`
+once (it lands in that phone's Keychain) and the per-device monthly cap and the
+service ceiling can be read and changed from there — `GET`/`PATCH /admin/limits`
+under the hood. Typical use: set the per-device cap to 10 while the app is in App
+Review, then raise it to 100 once approved. Values are clamped, persisted to
+`devices.json`, and survive a restart.
+
 Raise a cap, rename someone, or cut them off by editing `devices.json` — it is
 re-read live, no restart:
 

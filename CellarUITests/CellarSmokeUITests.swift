@@ -534,6 +534,70 @@ final class CellarSmokeUITests: XCTestCase {
         snapshot("12-edited-photo")
     }
 
+    /// The owner's caps, set from the phone: unlock the hidden controls, hand over
+    /// the admin token, read what the server enforces, and change it. Skipped
+    /// unless the proxy is running with ADMIN_TOKEN=admin123.
+    func testOwnerSetsMonthlyCapOnTheServer() throws {
+        try XCTSkipUnless(proxyIsRunning(), "Start the proxy: cd proxy && PROVIDER=mock npm start")
+
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Settings"].tap()
+        let endpoint = app.textFields.firstMatch
+        XCTAssertTrue(endpoint.waitForExistence(timeout: 5))
+        endpoint.tap()
+        if let existing = endpoint.value as? String, existing.hasPrefix("http") {
+            endpoint.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count))
+        }
+        endpoint.typeText("http://127.0.0.1:8787")
+        app.navigationBars["Settings"].buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 5))
+
+        app.navigationBars["Cellar"].buttons["Settings"].tap()
+        let version = app.staticTexts["app-version"]
+        for _ in 0..<4 where !version.exists { app.swipeUp() }
+        XCTAssertTrue(version.waitForExistence(timeout: 5))
+
+        // A phone that already holds the admin token keeps the controls on show, so
+        // the hidden-by-default check and the unlock only apply before that.
+        // (A section header's case is styled, so assert on the fields themselves.)
+        let tokenField = app.secureTextFields["Admin token from the server"]
+        let monthly = app.textFields["Monthly cap per device"]
+        if !monthly.exists {
+            XCTAssertFalse(tokenField.exists, "owner controls visible before unlocking")
+            for _ in 0..<5 { version.tap() }
+            for _ in 0..<3 where !tokenField.exists { app.swipeUp() }
+            XCTAssertTrue(tokenField.waitForExistence(timeout: 5),
+                          "five taps didn't reveal the owner controls")
+            tokenField.tap()
+            tokenField.typeText("admin123")
+            app.buttons["Save token"].tap()
+        }
+
+        // The caps the server is enforcing come back and fill the fields.
+        XCTAssertTrue(monthly.waitForExistence(timeout: 10), "server caps never loaded")
+        XCTAssertEqual(monthly.value as? String, "7", "the field should show what the server enforces")
+
+        // Tapping puts the cursor wherever it lands, so select the whole value
+        // before replacing it rather than assuming deletes reach it.
+        monthly.tap()
+        monthly.press(forDuration: 1.2)
+        if app.menuItems["Select All"].waitForExistence(timeout: 3) {
+            app.menuItems["Select All"].tap()
+        }
+        monthly.typeText("42")
+        XCTAssertEqual(monthly.value as? String, "42", "the cap field didn't take the new value")
+
+        app.buttons["Apply to server"].tap()
+        XCTAssertTrue(app.staticTexts["Saved. The server is enforcing these now."]
+                        .waitForExistence(timeout: 10), "the server didn't take the new cap")
+
+        // Leave the phone as it was found, so the next run re-tests the unlock.
+        let forget = app.buttons["Forget admin token"]
+        for _ in 0..<3 where !forget.exists { app.swipeUp() }
+        if forget.exists { forget.tap() }
+        XCTAssertTrue(tokenField.waitForExistence(timeout: 5), "the token wasn't forgotten")
+    }
+
     /// Online pricing through a plain-http dev proxy on this Mac. Skipped unless
     /// the proxy is running: `cd proxy && PROVIDER=mock npm start`.
     func testPricingViaLocalProxy() throws {

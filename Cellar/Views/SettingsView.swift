@@ -19,6 +19,19 @@ struct SettingsView: View {
     @State private var copiedID = false
     private let deviceID = DeviceIdentity.current
 
+    // Owner controls: hidden until the version line is tapped five times, so a
+    // friend's copy never shows them. Unlocking only reveals the fields — it
+    // grants nothing without the server's admin token.
+    @State private var versionTaps = 0
+    @State private var showsOwnerControls = AdminTokenStore.hasToken
+    @State private var adminTokenText = ""
+    @State private var hasAdminToken = AdminTokenStore.hasToken
+    @State private var monthlyCapText = ""
+    @State private var serviceCapText = ""
+    @State private var serverStatus: ProxyStatus?
+    @State private var adminBusy = false
+    @State private var adminMessage: String?
+
     var body: some View {
         NavigationStack {
             Form {
@@ -75,6 +88,8 @@ struct SettingsView: View {
                     Text("Passes this pricing server on as a QR code or a link, so they don't have to type any of it.")
                 }
 
+                if showsOwnerControls { ownerSection }
+
                 Section {
                     Text("Prices are cached per wine for 7 days, so a paid API is hit at most once per wine per week.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -99,6 +114,11 @@ struct SettingsView: View {
                         // "it doesn't work on my phone" conversation.
                         Text(AppVersion.display)
                             .accessibilityIdentifier("app-version")
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                versionTaps += 1
+                                if versionTaps >= 5 { showsOwnerControls = true }
+                            }
                     }
                     .font(.caption2).foregroundStyle(.secondary)
                 }
@@ -119,6 +139,102 @@ struct SettingsView: View {
                     Button("Save") { save() }
                 }
             }
+        }
+    }
+
+    /// Caps the pricing server enforces, changed from this phone: set them low
+    /// while the app is in App Review, higher once it's approved.
+    @ViewBuilder
+    private var ownerSection: some View {
+        Section("Server admin") {
+            if hasAdminToken {
+                capRow("Monthly cap per device", text: $monthlyCapText, placeholder: "100")
+                capRow("Cap for everyone together", text: $serviceCapText, placeholder: "1500")
+                Button {
+                    Task { await applyCaps() }
+                } label: {
+                    HStack {
+                        Text("Apply to server")
+                        if adminBusy { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(adminBusy || monthlyCapText.isEmpty || serviceCapText.isEmpty)
+                if let status = serverStatus {
+                    Text(status.summary).font(.caption).foregroundStyle(.secondary)
+                }
+                if let adminMessage {
+                    Text(adminMessage).font(.caption).foregroundStyle(.secondary)
+                }
+                Button("Forget admin token", role: .destructive) {
+                    AdminTokenStore.delete()
+                    hasAdminToken = false
+                    serverStatus = nil
+                    adminMessage = nil
+                }
+            } else {
+                SecureField("Admin token from the server", text: $adminTokenText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Save token") {
+                    AdminTokenStore.save(adminTokenText)
+                    adminTokenText = ""
+                    hasAdminToken = AdminTokenStore.hasToken
+                    if hasAdminToken { Task { await loadCaps() } }
+                }
+                .disabled(adminTokenText.trimmingCharacters(in: .whitespaces).isEmpty)
+                Text("ADMIN_TOKEN from the pricing server. Stored in this phone's Keychain; 0 in either field means no limit.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .task(id: hasAdminToken) {
+            if hasAdminToken, serverStatus == nil { await loadCaps() }
+        }
+    }
+
+    /// A labelled number field. Plain HStack rather than LabeledContent so the
+    /// field itself takes focus when tapped.
+    private func capRow(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField(placeholder, text: text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 90)
+                .accessibilityLabel(label)
+        }
+    }
+
+    /// Show what the server is enforcing before anything is changed.
+    private func loadCaps() async {
+        adminBusy = true
+        defer { adminBusy = false }
+        do {
+            let status = try await ProxyAdmin.status()
+            serverStatus = status
+            monthlyCapText = String(status.limits.monthly)
+            serviceCapText = String(status.limits.globalMonthly)
+            adminMessage = nil
+        } catch {
+            adminMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func applyCaps() async {
+        guard let monthly = Int(monthlyCapText), let service = Int(serviceCapText) else {
+            adminMessage = "Caps must be whole numbers."
+            return
+        }
+        adminBusy = true
+        defer { adminBusy = false }
+        do {
+            let status = try await ProxyAdmin.update(monthlyPerDevice: monthly, serviceMonthly: service)
+            serverStatus = status
+            monthlyCapText = String(status.limits.monthly)
+            serviceCapText = String(status.limits.globalMonthly)
+            adminMessage = "Saved. The server is enforcing these now."
+        } catch {
+            adminMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 

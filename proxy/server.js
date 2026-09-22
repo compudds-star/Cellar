@@ -30,6 +30,7 @@ const {
   DEVICES_FILE = "./devices.json",   // per-install roster + usage counters
   DEVICE_DAILY_LIMIT = "100",        // billable lookups per device per day (0 = unlimited)
   DEVICE_MONTHLY_LIMIT = "300",      // ...and per calendar month (0 = unlimited)
+  GLOBAL_MONTHLY_LIMIT = "1500",     // billable lookups across ALL devices per month (0 = unlimited)
   MAX_DEVICES = "10",                // how many installs may self-enrol
   ALLOW_UNKNOWN_DEVICES = "1",       // 0 = only ids already in the file may look up
   REQUIRE_DEVICE = "0",              // 1 = reject requests with no device header
@@ -41,9 +42,21 @@ const CACHE_TTL_MS = Number(CACHE_TTL_SECONDS) * 1000;
 const WS_GRACE_MS = Number(WS_GRACE_SECONDS) * 1000;
 const WS_TIMEOUT_MS = Number(WS_TIMEOUT_SECONDS) * 1000;
 const RATE_LIMIT = Number(RATE_LIMIT_PER_MIN);
-const DAILY_LIMIT = Number(DEVICE_DAILY_LIMIT);
-const MONTHLY_LIMIT = Number(DEVICE_MONTHLY_LIMIT);
 const DEVICE_CAP = Number(MAX_DEVICES);
+
+// Limits start from the environment and can then be changed from the owner's
+// phone (Settings → Monthly cap), which persists them in DEVICES_FILE. A stored
+// value wins so a restart keeps what was set; delete the "limits" block in that
+// file to fall back to the environment.
+const limits = {
+  daily: Number(DEVICE_DAILY_LIMIT),
+  monthly: Number(DEVICE_MONTHLY_LIMIT),
+  globalMonthly: Number(GLOBAL_MONTHLY_LIMIT),
+};
+/// Billable lookups across every device this calendar month — the ceiling that
+/// bounds the bill when the proxy runs open, since a fresh device id would
+/// otherwise start a fresh allowance.
+let globalUsage = { month: "", count: 0 };
 
 const app = express();
 app.disable("x-powered-by");
@@ -178,6 +191,18 @@ function loadDevices() {
     if (stat.mtimeMs === devicesMtime) return;      // unchanged since we last read/wrote
     devicesMtime = stat.mtimeMs;
     const stored = JSON.parse(readFileSync(DEVICES_FILE, "utf8"));
+    for (const key of ["daily", "monthly", "globalMonthly"]) {
+      const v = stored?.limits?.[key];
+      if (Number.isFinite(v) && v >= 0) limits[key] = Number(v);
+    }
+    if (stored?.global && typeof stored.global.month === "string") {
+      // Keep whichever count is higher: ours may have advanced since the write.
+      if (stored.global.month === globalUsage.month) {
+        globalUsage.count = Math.max(globalUsage.count, Number(stored.global.count) || 0);
+      } else if (!globalUsage.month) {
+        globalUsage = { month: stored.global.month, count: Number(stored.global.count) || 0 };
+      }
+    }
     for (const [id, rec] of Object.entries(stored?.devices || {})) {
       if (!validDeviceId(id) || !rec) continue;
       const live = devices.get(id);
@@ -203,7 +228,11 @@ function saveDevicesNow() {
   devicesTimer = null;
   try {
     const tmp = `${DEVICES_FILE}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ devices: Object.fromEntries(devices) }, null, 2));
+    writeFileSync(tmp, JSON.stringify({
+      limits: { ...limits },
+      global: globalSnapshot(),
+      devices: Object.fromEntries(devices),
+    }, null, 2));
     renameSync(tmp, DEVICES_FILE);
     devicesMtime = statSync(DEVICES_FILE).mtimeMs;  // our own write isn't an outside edit
   } catch (err) {
@@ -224,6 +253,13 @@ function rollCounters(rec) {
 }
 
 const effectiveLimit = (own, fallback) => (own === null || own === undefined ? fallback : Number(own));
+
+/// This month's total, rolled over at the month boundary.
+function globalSnapshot() {
+  const month = monthKey();
+  if (globalUsage.month !== month) globalUsage = { month, count: 0 };
+  return { month: globalUsage.month, count: globalUsage.count, limit: limits.globalMonthly };
+}
 
 /// May this device make a lookup that could cost money? Enrols a new one the
 /// first time it appears, up to MAX_DEVICES.
@@ -254,10 +290,16 @@ function deviceCheck(id) {
 /// Checked only once a lookup is about to reach the provider, so a cache hit is
 /// free and a friend is never charged for a wine someone else already priced.
 function quotaCheck(rec) {
+  // The ceiling on everyone together comes first: it is what bounds the bill when
+  // the proxy runs without a token and anyone can enrol.
+  const total = globalSnapshot();
+  if (total.limit > 0 && total.count >= total.limit) {
+    return { ok: false, status: 429, error: "service_limit_reached", limit: total.limit };
+  }
   if (!rec) return { ok: true };
   rollCounters(rec);
-  const daily = effectiveLimit(rec.dailyLimit, DAILY_LIMIT);
-  const monthly = effectiveLimit(rec.monthlyLimit, MONTHLY_LIMIT);
+  const daily = effectiveLimit(rec.dailyLimit, limits.daily);
+  const monthly = effectiveLimit(rec.monthlyLimit, limits.monthly);
   if (daily > 0 && rec.dayCount >= daily) {
     return { ok: false, status: 429, error: "daily_limit_reached", limit: daily };
   }
@@ -269,7 +311,9 @@ function quotaCheck(rec) {
 
 /// Called only when a lookup actually reaches the provider — i.e. costs money.
 function noteBillable(rec) {
-  if (!rec) return;
+  const total = globalSnapshot();          // rolls the month over if needed
+  globalUsage.count = total.count + 1;
+  if (!rec) { saveDevicesSoon(); return; }
   rollCounters(rec);
   rec.dayCount += 1;
   rec.monthCount += 1;
@@ -286,27 +330,62 @@ if (OWNER_DEVICE && validDeviceId(OWNER_DEVICE) && !devices.get(OWNER_DEVICE)) {
 
 app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER }));
 
-// Who is using your provider credits, and how much. Read-only; change limits by
-// editing DEVICES_FILE (it is picked up live).
-app.get("/admin/devices", (req, res) => {
-  if (!ADMIN_TOKEN) return res.status(404).json({ error: "not_found" });
+/// The owner's phone (Settings → Monthly cap) and your terminal both authenticate
+/// with ADMIN_TOKEN. Unset = the admin endpoints don't exist at all.
+function adminOK(req) {
+  if (!ADMIN_TOKEN) return false;
   const m = /^Bearer\s+(.+)$/.exec(req.headers.authorization || "");
   const given = Buffer.from(m?.[1] || "");
   const want = Buffer.from(ADMIN_TOKEN);
-  if (given.length !== want.length || !timingSafeEqual(given, want)) {
-    return res.status(401).json({ error: "unauthorized" });
+  return given.length === want.length && timingSafeEqual(given, want);
+}
+
+/// Read the caps in force, and this month's total. The app shows these before
+/// changing anything, so the owner is never editing blind.
+app.get("/admin/limits", (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).json({ error: "not_found" });
+  if (!adminOK(req)) return res.status(401).json({ error: "unauthorized" });
+  loadDevices();
+  res.json({ limits: { ...limits }, global: globalSnapshot(), devices: devices.size });
+});
+
+/// Change them from the owner's phone: 10 while the app is in review, 100 after.
+/// Values are clamped to something sane and persisted, so a restart keeps them.
+app.patch("/admin/limits", express.json({ limit: "4kb" }), (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).json({ error: "not_found" });
+  if (!adminOK(req)) return res.status(401).json({ error: "unauthorized" });
+  loadDevices();
+  const MAX = 100000;
+  for (const [field, key] of [["monthlyLimit", "monthly"], ["dailyLimit", "daily"],
+                              ["globalMonthlyLimit", "globalMonthly"]]) {
+    const v = req.body?.[field];
+    if (v === undefined || v === null) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > MAX) {
+      return res.status(400).json({ error: "bad_limit", field });
+    }
+    limits[key] = Math.floor(n);
   }
+  saveDevicesNow();
+  console.log(`limits: device ${limits.monthly}/month, ${limits.daily}/day, service ${limits.globalMonthly}/month`);
+  res.json({ limits: { ...limits }, global: globalSnapshot() });
+});
+
+// Who is using your provider credits, and how much.
+app.get("/admin/devices", (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).json({ error: "not_found" });
+  if (!adminOK(req)) return res.status(401).json({ error: "unauthorized" });
   loadDevices();
   const rows = [...devices.entries()].map(([id, rec]) => {
     rollCounters(rec);
     return {
       id, name: rec.name, revoked: rec.revoked,
-      today: rec.dayCount, dailyLimit: effectiveLimit(rec.dailyLimit, DAILY_LIMIT),
-      thisMonth: rec.monthCount, monthlyLimit: effectiveLimit(rec.monthlyLimit, MONTHLY_LIMIT),
+      today: rec.dayCount, dailyLimit: effectiveLimit(rec.dailyLimit, limits.daily),
+      thisMonth: rec.monthCount, monthlyLimit: effectiveLimit(rec.monthlyLimit, limits.monthly),
       total: rec.total, firstSeen: rec.firstSeen, lastSeen: rec.lastSeen,
     };
   });
-  res.json({ devices: rows, defaults: { daily: DAILY_LIMIT, monthly: MONTHLY_LIMIT },
+  res.json({ devices: rows, limits: { ...limits }, global: globalSnapshot(),
              cacheEntries: cache.size });
 });
 

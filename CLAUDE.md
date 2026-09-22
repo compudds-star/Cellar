@@ -132,7 +132,15 @@ proxy/                      Node 18+ pricing proxy for the user's Oracle host
   Info.plist), which the app always confirms before applying; Settings → Invite a
   friend renders that link as a QR (token read from the Keychain, never a file)
   and can send it. `ValuationSettings.bundledBaseURL` bakes the endpoint into the
-  build — the endpoint only; tokens never ship in the binary. See
+  build — the endpoint only; tokens never ship in the binary.
+- **Open mode (App Store):** with `PROXY_TOKEN` unset, anyone who installs the app
+  works out of the box — App Review included, no credentials in the review notes.
+  What bounds the bill then is `GLOBAL_MONTHLY_LIMIT` (all devices together), not
+  the per-device cap, since a fresh device id starts a fresh allowance. Both are
+  changed from the owner's phone: Settings → tap the version line 5× → Server
+  admin (`ProxyAdmin` + `AdminTokenStore`, `GET`/`PATCH /admin/limits`). Set the
+  per-device cap to 10 for review, 100 after. Paste-ready reviewer notes live in
+  `docs/app-store-review-notes.md`. See
   "Sharing the app with friends" in `proxy/README.md`.
 - **LWIN:** `Wine.lwin7` (7-digit wine identity) + `lwin11` (with vintage). The
   bundled `lwin_sample.csv` codes start at 9000001 and are **illustrative, not
