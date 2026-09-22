@@ -248,6 +248,11 @@ re-read live, no restart:
 `0` means unlimited. You own the limits; the server owns the counters, so an edit
 while it is running never resets anyone's usage.
 
+**Revoking works live; deleting does not.** The reload adds and updates devices but
+never drops one, and the running process flushes its own copy every couple of
+seconds — so a device deleted from the file reappears. Set `"revoked": true` to cut
+someone off immediately; to remove the row entirely, stop the service, edit, start.
+
 ### Seeing who is spending
 
 ```bash
