@@ -13,12 +13,17 @@ EnvironmentFile=/etc/cellar-proxy.env
 ExecStart=/usr/bin/node /opt/cellar-proxy/server.js
 Restart=on-failure
 RestartSec=3
+# Writable state: /var/lib/cellar-proxy, created and chowned to User= by systemd.
+# ProtectSystem=strict makes everything else read-only, so the cache and the device
+# roster MUST live here — point CACHE_FILE and DEVICES_FILE at it in the env file.
+# Without this the proxy still runs, but every save fails and the per-device
+# counters and caps reset on each restart.
+StateDirectory=cellar-proxy
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=
 
 [Install]
 WantedBy=multi-user.target

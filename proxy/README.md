@@ -85,6 +85,9 @@ sudo chmod 600 /etc/cellar-proxy.env
 
 # 4. systemd
 sudo cp proxy/deploy/cellar-proxy.service /etc/systemd/system/
+# The unit runs with ProtectSystem=strict, so /var/lib/cellar-proxy (StateDirectory)
+# is the only writable path — CACHE_FILE and DEVICES_FILE must point there or the
+# cache and the per-device counters/caps are lost on every restart.
 sudo systemctl daemon-reload
 sudo systemctl enable --now cellar-proxy
 curl http://127.0.0.1:8787/health           # {"ok":true,...}
