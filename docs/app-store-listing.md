@@ -107,6 +107,7 @@ These must match `Cellar/PrivacyInfo.xcprivacy`; change one and change the other
 |---|---|---|---|
 | Identifiers → **Device ID** | Yes | No | App Functionality |
 | Usage Data → **Product Interaction** | Yes | No | App Functionality |
+| User Content → **Photos or Videos** | No | No | App Functionality |
 | **Other Data** | No | No | App Functionality |
 
 Device ID is the per-install `Ryc#j0` code, stored server-side with lookup counts
@@ -116,7 +117,12 @@ counts. Other Data is the wine name and vintage sitting in the proxy's seven-day
 response cache: past "serviced in real time", so declared, but keyed to no device
 and therefore not linked.
 
+Photos or Videos covers one path only: "Read the photo instead", offered when the
+recognised text was too damaged to identify a bottle. A person has to tap it, we
+store nothing, and a scan that goes well never sends a picture. Ordinary scanning
+sends only the text the phone recognised, which is covered by Other Data.
+
 Not declared, and why: **Location** goes to Apple Maps through MapKit and never to
-our server (a first-party framework is not a third-party partner); **photos and
-user content** never leave the device; **prices paid** stay on the device;
-there is no analytics, advertising or crash SDK of any kind.
+our server (a first-party framework is not a third-party partner); **prices paid**
+and everything else about the cellar stay on the device; there is no analytics,
+advertising or crash SDK of any kind.

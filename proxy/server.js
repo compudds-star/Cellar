@@ -10,6 +10,9 @@
 // See README.md for deployment.
 
 import express from "express";
+import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { readFileSync, writeFileSync, renameSync, statSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -40,6 +43,8 @@ const {
   NON_RETAIL_PATTERN = "",           // override the built-in list (a JS regex source)
   OWNER_DEVICE = "",                 // this id is enrolled unlimited on startup
   ADMIN_TOKEN = "",                  // bearer token for GET /admin/devices
+  ANTHROPIC_API_KEY = "",            // reading labels; unset disables /parse-label
+  LABEL_MODEL = "claude-opus-5",     // model that turns OCR text (or a photo) into fields
 } = process.env;
 
 const CACHE_TTL_MS = Number(CACHE_TTL_SECONDS) * 1000;
@@ -348,7 +353,105 @@ for (const [routes, file] of [[["/support", "/support.html"], "support.html"],
   });
 }
 
-app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER }));
+// ---- Reading labels ---------------------------------------------------------
+// On-device OCR is good at pixels and bad at meaning: it returns "CHATFAU
+// MARGAIIX / PREMIER GRAND CRU CLASSE / 2ol5" and something still has to decide
+// which line is the producer. Claude does both jobs — it fixes the garbled
+// characters because it knows what real wines are called, and it puts each piece
+// in the right field.
+//
+// Two ways in, and the difference matters for privacy:
+//   • `lines` — the text the phone already recognised. The photo stays on the
+//     device. This is what every scan sends.
+//   • `image` — the photo itself, only when the person taps "read the photo",
+//     because the text came back as mush. Never automatic.
+const anthropic = ANTHROPIC_API_KEY ? new Anthropic({ apiKey: ANTHROPIC_API_KEY }) : null;
+
+const WINE_TYPES = ["red", "white", "rose", "sparkling", "dessert", "fortified", "orange",
+                    "whisky", "brandy", "rum", "gin", "vodka", "tequila", "liqueur",
+                    "spirit", "other"];
+
+const LabelSchema = z.object({
+  producer: z.string().describe("The estate, château, domaine or distillery. Empty if not legible."),
+  name: z.string().describe("The cuvée or expression, without the producer. Empty if there isn't one."),
+  varietal: z.string().describe("Grape or grain, only if the label states it."),
+  region: z.string().describe("Appellation or region as printed."),
+  country: z.string().describe("Country of origin, in English."),
+  vintage: z.number().int().nullable().describe("Four-digit year, or null for non-vintage."),
+  type: z.enum(WINE_TYPES).describe("Best fit for what is in the bottle."),
+  confidence: z.enum(["high", "medium", "low"])
+    .describe("low when the text is too damaged to identify the wine."),
+});
+
+const LABEL_SYSTEM = [
+  "You read wine and spirits labels and return structured fields.",
+  "",
+  "The text you are given comes from on-device OCR and is often damaged:",
+  "characters swapped (0/O, 1/l, rn/m), accents dropped, words split across",
+  "lines, and importer or legal boilerplate mixed in with the name. Use what you",
+  "know about real producers and wines to repair it — 'CHATFAU MARGAIIX' is",
+  "Château Margaux — but never invent a wine that the text does not support.",
+  "",
+  "Rules:",
+  "- Leave a field as an empty string when the label does not show it. Guessing a",
+  "  region or varietal that isn't printed is worse than leaving it blank.",
+  "- producer is the estate; name is the cuvée without the producer repeated.",
+  "- Ignore boilerplate: alcohol percentage, volume, 'mis en bouteille',",
+  "  'product of', importer names, sulfite warnings, awards.",
+  "- vintage is the wine's year, not a founding date or an address number.",
+  "- Set confidence to low when the text is too damaged to identify the bottle;",
+  "  the app then offers to read the photo instead.",
+].join("\n");
+
+app.post("/parse-label", express.json({ limit: "8mb" }), async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
+  if (!tokenOK(req.headers.authorization)) return res.status(401).json({ error: "unauthorized" });
+  if (!anthropic) return res.status(503).json({ error: "label_reading_unavailable" });
+
+  const access = deviceCheck(String(req.headers["x-cellar-device"] || "").trim());
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const lines = Array.isArray(req.body?.lines)
+    ? req.body.lines.map((l) => String(l)).filter(Boolean).slice(0, 60)
+    : [];
+  const image = req.body?.image;
+  const hasImage = image && typeof image.data === "string" &&
+                   /^image\/(jpeg|png|webp|heic)$/.test(String(image.media_type || ""));
+  if (!lines.length && !hasImage) return res.status(400).json({ error: "nothing_to_read" });
+
+  // Reading a label costs money like a price lookup does, so it answers to the
+  // same per-device and service caps.
+  const quota = quotaCheck(access.rec);
+  if (!quota.ok) return res.status(quota.status).json({ error: quota.error, limit: quota.limit });
+
+  const content = [];
+  if (hasImage) {
+    content.push({ type: "image", source: { type: "base64", media_type: image.media_type, data: image.data } });
+    content.push({ type: "text", text: "Read this label and return its fields." });
+  } else {
+    content.push({ type: "text", text: `OCR text from a bottle label:\n\n${lines.join("\n")}` });
+  }
+
+  try {
+    noteBillable(access.rec);
+    const message = await anthropic.messages.parse({
+      model: LABEL_MODEL,
+      max_tokens: 2048,
+      system: LABEL_SYSTEM,
+      messages: [{ role: "user", content }],
+      output_config: { format: zodOutputFormat(LabelSchema), effort: "low" },
+    });
+    const parsed = message.parsed_output;
+    if (!parsed) return res.status(502).json({ error: "unreadable" });
+    res.json({ ...parsed, source: hasImage ? "photo" : "text" });
+  } catch (err) {
+    console.error("label read failed:", err?.message || "error");
+    res.status(502).json({ error: "label_read_failed" });
+  }
+});
+
+app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER, labels: !!anthropic }));
 
 /// The owner's phone (Settings → Monthly cap) and your terminal both authenticate
 /// with ADMIN_TOKEN. Unset = the admin endpoints don't exist at all.

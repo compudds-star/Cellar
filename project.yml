@@ -14,7 +14,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"   # bump before every upload — App Store Connect rejects a reused build number
+    CURRENT_PROJECT_VERSION: "3"   # bump before every upload — App Store Connect rejects a reused build number
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: "24Q366W5BQ"            # your Apple Team ID (same as DOONY)
     CODE_SIGN_STYLE: Automatic

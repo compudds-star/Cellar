@@ -56,10 +56,27 @@
 			</array>
 		</dict>
 		<dict>
+			<!-- "Read the photo instead": when on-device OCR can't make sense of a
+			     label, the person may choose to send the picture to be read. Never
+			     automatic, never retained by us — declared because a third party
+			     processes it. Photos are not sent for any other purpose, and a
+			     scan that goes well never sends one. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
 			<!-- The pricing service caches answers for seven days and the cache
-			     key holds the wine's name and vintage. That outlives the request,
-			     so it is declared — but the cache is global and tied to no device
-			     or person, hence not linked. -->
+			     key holds the wine's name and vintage; label text sent to be read
+			     is processed and not stored. Both outlive the bare request, so they
+			     are declared — but neither is tied to a device or person. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>

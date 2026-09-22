@@ -39,6 +39,16 @@ struct AddWineFlow: View {
     /// typed themselves.
     @State private var suggestedWindow: DrinkWindow?
 
+    // Reading the label
+    @State private var readingLabel = false
+    /// Offered when the text was too damaged to identify the bottle. The photo
+    /// is only ever sent from this button.
+    @State private var offerPhotoRead = false
+    @State private var readingError: String?
+    /// What we last filled in ourselves, so a better reading can correct our own
+    /// guesses without overwriting a word the user typed over them.
+    @State private var lastAutoFill = ParsedLabel()
+
     @State private var showingScanner = false
     @State private var showingLWIN = false
     @State private var photoItem: PhotosPickerItem?
@@ -131,6 +141,28 @@ struct AddWineFlow: View {
                             }
                         }
                         .buttonStyle(.borderless)
+                    }
+                }
+
+                if readingLabel || offerPhotoRead || readingError != nil {
+                    Section {
+                        if readingLabel {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("Reading the label…").foregroundStyle(.secondary)
+                            }
+                        } else if offerPhotoRead {
+                            Button {
+                                Task { await readLabelPhoto() }
+                            } label: {
+                                Label("Read the photo instead", systemImage: "sparkle.magnifyingglass")
+                            }
+                            Text("The text came back too garbled to place. This sends the photo itself to be read — the only time a label picture leaves your phone.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let readingError {
+                            Text(readingError).font(.caption).foregroundStyle(.orange)
+                        }
                     }
                 }
 
@@ -263,6 +295,9 @@ struct AddWineFlow: View {
                     if let image, let data = image.jpegData(compressionQuality: 0.9) {
                         labelImage = ImageResizer.jpeg(from: data, maxDimension: 1200)
                     }
+                    // The heuristics have filled what they can; now let the reader
+                    // straighten out the garbled characters and the wrong fields.
+                    Task { await refineReading(from: parsed.rawLines) }
                 }
             }
             .fullScreenCover(isPresented: $takingPhoto) {
@@ -310,8 +345,65 @@ struct AddWineFlow: View {
         labelImage = ImageResizer.jpeg(from: image, maxDimension: 1200)
         if producer.isEmpty, name.isEmpty {
             let lines = await ImageTextRecognizer.recognizeLines(in: image)
-            if !lines.isEmpty { apply(LabelParser.parse(textLines: lines)) }
+            if !lines.isEmpty {
+                apply(LabelParser.parse(textLines: lines))
+                await refineReading(from: lines.map(\.text))
+            }
         }
+    }
+
+    /// Sends the recognised *text* to be read properly — the photo stays here.
+    /// Silent on failure: this only ever improves a form the user can edit, so a
+    /// network hiccup shouldn't interrupt them.
+    private func refineReading(from lines: [String]) async {
+        guard LabelAI.isAvailable, !lines.isEmpty else { return }
+        readingLabel = true
+        defer { readingLabel = false }
+        do {
+            let reading = try await LabelAI.refine(lines: lines)
+            apply(reading.label, from: reading)
+            // Too damaged to identify from the text alone — offer the photo,
+            // rather than sending it unasked.
+            offerPhotoRead = reading.confidence == .low && labelImage != nil
+        } catch {
+            offerPhotoRead = labelImage != nil
+        }
+    }
+
+    /// The photo route, and only from a button the person pressed.
+    private func readLabelPhoto() async {
+        guard let data = labelImage, let image = UIImage(data: data) else { return }
+        readingLabel = true
+        defer { readingLabel = false }
+        do {
+            let reading = try await LabelAI.read(photo: image)
+            apply(reading.label, from: reading)
+            offerPhotoRead = false
+        } catch {
+            readingError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// A better reading of the same label. Each field is replaced only where it
+    /// still holds what we put there (or nothing) — anything the user has typed
+    /// over stands, because they can see the bottle and we can't.
+    private func apply(_ parsed: ParsedLabel, from reading: LabelAI.Reading) {
+        func adopt(_ new: String, _ current: inout String, _ mine: String) {
+            guard !new.isEmpty, current.isEmpty || current == mine else { return }
+            current = new
+        }
+        adopt(parsed.producer, &producer, lastAutoFill.producer)
+        adopt(parsed.name, &name, lastAutoFill.name)
+        adopt(parsed.varietal, &varietal, lastAutoFill.varietal)
+        adopt(parsed.region, &region, lastAutoFill.region)
+        adopt(parsed.country, &country, lastAutoFill.country)
+        if let v = parsed.vintage {
+            let mine = lastAutoFill.vintage.map(String.init) ?? ""
+            adopt(String(v), &vintageText, mine)
+        }
+        if type == lastAutoFill.type { type = parsed.type }
+        lastAutoFill = parsed
+        matchLWIN()
     }
 
     private func apply(_ parsed: ParsedLabel) {
@@ -322,12 +414,31 @@ struct AddWineFlow: View {
         if !parsed.country.isEmpty { country = parsed.country }
         if let v = parsed.vintage { vintageText = String(v) }
         type = parsed.type
-        // Snap to an LWIN match only when it's confident AND clearly ahead of the
-        // runner-up; otherwise leave it to "Find LWIN match" so the user picks.
-        if lwin7 == nil,
-           let pick = LWINMatcher.confidentPick(
-               LWINMatcher().bestMatches(producer: producer, name: name, region: region,
-                                         vintage: vintageInt, limit: 2)) {
+        lastAutoFill = parsed
+        matchLWIN(rawLines: parsed.rawLines)
+    }
+
+    /// Snap to an LWIN match only when it's confident AND clearly ahead of the
+    /// runner-up; otherwise leave it to "Find LWIN match" so the user picks.
+    ///
+    /// When the fields don't match anything — which is what happens when OCR
+    /// mangled them — try the raw recognised text as one query. The index is
+    /// token-based, so a line with two words right out of four can still land on
+    /// the correct wine where the tidied fields did not.
+    private func matchLWIN(rawLines: [String] = []) {
+        guard lwin7 == nil else { return }
+        let matcher = LWINMatcher()
+        if let pick = LWINMatcher.confidentPick(
+            matcher.bestMatches(producer: producer, name: name, region: region,
+                                vintage: vintageInt, limit: 2)) {
+            applyLWIN(pick.record)
+            return
+        }
+        guard !rawLines.isEmpty else { return }
+        let text = rawLines.joined(separator: " ")
+        if let pick = LWINMatcher.confidentPick(
+            matcher.bestMatches(producer: text, name: "", region: "",
+                                vintage: vintageInt, limit: 2)) {
             applyLWIN(pick.record)
         }
     }

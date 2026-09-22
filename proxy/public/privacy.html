@@ -82,7 +82,8 @@
     <li>a random identifier for your installation, described below.</li>
   </ul>
   <p>It does not send your cellar, your quantities, your prices paid, your notes,
-  your ratings, your photos or your location. Clear the endpoint in Settings and
+  your ratings or your location, and it does not send a photo unless you ask it to
+  read one. Clear the endpoint in Settings and
   nothing leaves the device at all — the rest of the app keeps working.</p>
 
   <h2>The installation identifier</h2>
@@ -99,7 +100,12 @@
   <h2>Camera, photos and location</h2>
   <ul>
     <li><strong>Camera and photo library</strong> — used only to read a wine label.
-    Text recognition runs on your device; label images are never uploaded.</li>
+    Text recognition runs on your device. The <em>text</em> it recognises is sent to
+    the reading service to be sorted into producer, name and vintage, because OCR
+    output is often garbled and out of order. <strong>The photo itself stays on your
+    phone</strong> unless you tap “Read the photo instead”, which is offered only
+    when the text was too damaged to identify the bottle. Nothing is sent
+    automatically, and neither the text nor the photo is stored by us.</li>
     <li><strong>Location</strong> — requested only when you ask for wine shops near
     you. It is used to run a map search through Apple Maps and is never stored by us
     or sent to our servers. Apple's handling of that search is covered by

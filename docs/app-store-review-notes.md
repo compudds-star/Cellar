@@ -29,6 +29,14 @@ If the daily/monthly lookup allowance is exhausted during testing, the app says 
 plainly and everything else keeps working — please let us know rather than treating
 it as a failure, and we will raise the limit immediately.
 
+READING A LABEL
+Cellar tab → + → Scan label. The phone recognises the text on the label, and the
+app asks the same service to sort it into producer, name and vintage (OCR output
+is usually out of order and partly garbled). The label photo stays on the device.
+If the text is too damaged to identify the bottle, the form offers "Read the photo
+instead" — that is the only path that sends a picture, and only when tapped. No
+credentials are needed for either.
+
 WORKS WITHOUT A NETWORK
 Online pricing is optional. With it off (Settings → Pricing endpoint → clear the
 field), the whole app still works: label scanning, the bundled 205,000-wine
@@ -39,7 +47,9 @@ PRIVACY
 The cellar itself never leaves the device: wines, bottles, photos, notes and any
 location use stay in an on-device store. A price lookup sends only the wine's name
 and vintage plus a random per-install identifier, which the pricing service counts
-against a usage limit. There is no analytics SDK and no third-party SDK of any kind.
+against a usage limit. Scanning sends the recognised text; a label photo is sent
+only if the user taps "Read the photo instead". There is no analytics SDK and no
+third-party SDK of any kind.
 
 CAMERA / PHOTOS / LOCATION
 Camera and photo library are used only to read a wine label (on-device Vision OCR).

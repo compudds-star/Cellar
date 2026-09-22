@@ -69,7 +69,11 @@ Cellar/                      app source (Swift)
 │   └── CellarCollection.swift named location for bottles (Home, Beach house) +
 │                            CollectionScope (totals per collection), CollectionMemory
 ├── Scan/                    VisionKit DataScanner live OCR (+ capturePhoto for the
-│                            label image), Vision still-photo fallback, LabelParser (pure)
+│                            label image), Vision still-photo fallback, LabelParser (pure);
+│                            LabelAI posts the recognised TEXT to the proxy's /parse-label
+│                            to fix garbled characters and wrong fields — the photo stays on
+│                            device unless the user taps "Read the photo instead" (low
+│                            confidence only), which is the one path that uploads an image
 ├── LWIN/                    free Liv-ex identity matching: LWINDatabase (loads
 │                            Resources/LWIN.csv if present else lwin_sample.csv,
 │                            inverted token index), LWINMatcher (scoring), LWINRecord
@@ -110,7 +114,9 @@ Cellar/Import/              PendingImporter: app imports pending shares when it 
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv
-proxy/                      Node 18+ pricing proxy for the user's Oracle host; also serves
+proxy/                      Node 18+ pricing proxy for the user's Oracle host; reads labels
+                            via /parse-label (Anthropic SDK, ANTHROPIC_API_KEY on the server,
+                            LABEL_MODEL defaults to claude-opus-5); also serves
                             the App Store support and privacy pages from proxy/public/
                             (https://cellar.orangeeaglesa.com/support and /privacy)
 ```
