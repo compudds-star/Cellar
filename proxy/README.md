@@ -162,6 +162,80 @@ Then in the app: **Settings → endpoint** = `https://<domain>`, **API key** = t
   `max` stays empty (neither actor quotes a range) and online offers are thin;
   nearby stores come from MapKit on the phone. Repeats are cached for 7 days.
 
+## Sharing the app with friends
+
+Friends' cellars are already private — wines, bottles and notes never leave the
+phone. What is shared is **your provider bill**, so the proxy identifies installs
+and caps them.
+
+Every install sends a short id from its Keychain:
+
+```
+X-Cellar-Device: Ryc#j0
+```
+
+The id is minted on first launch, survives a reinstall, and is shown at the
+bottom of the app's Settings so someone can read it to you. It says nothing
+about who they are or what they own.
+
+**Only lookups that reach the provider count.** A cache hit is free and charged
+to nobody, so a friend is never penalised for a wine someone else already priced.
+
+### Setting a friend up in one tap
+
+Send them a link (iMessage, email, a QR code — anything that opens on the phone):
+
+```
+cellar://configure?endpoint=https://prices.example.com&token=<PROXY_TOKEN>
+```
+
+The app asks "Use this pricing server?", names the host, and applies it on
+confirm — no typing a URL into Settings. It refuses links the Settings field
+would refuse anyway (cleartext to a public host). You can also bake the endpoint
+into the build via `ValuationSettings.bundledBaseURL` so only the token travels.
+
+### Caps, and changing them
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `DEVICE_DAILY_LIMIT` | 100 | Billable lookups per device per day. `0` = unlimited. |
+| `DEVICE_MONTHLY_LIMIT` | 300 | ...and per calendar month. `0` = unlimited. |
+| `MAX_DEVICES` | 10 | How many installs may enrol themselves. |
+| `ALLOW_UNKNOWN_DEVICES` | 1 | `0` = only ids already in `devices.json` may look up. |
+| `OWNER_DEVICE` | — | Your id, enrolled unlimited at startup. |
+
+100/day is one full refresh of a large cellar plus headroom; 300/month is about
+four, which the 7-day cache means nobody legitimately needs to exceed. At the
+Vivino actor's ~$0.003/wine that is **~$0.90 per device per month worst case**.
+
+Raise a cap, rename someone, or cut them off by editing `devices.json` — it is
+re-read live, no restart:
+
+```json
+{
+  "devices": {
+    "Ryc#j0": { "name": "me",   "dailyLimit": 0, "monthlyLimit": 0 },
+    "Abc#12": { "name": "Dave", "dailyLimit": 250 },
+    "Zzz#99": { "name": "spammer", "revoked": true }
+  }
+}
+```
+
+`0` means unlimited. You own the limits; the server owns the counters, so an edit
+while it is running never resets anyone's usage.
+
+### Seeing who is spending
+
+```bash
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://prices.example.com/admin/devices | jq
+```
+
+Per device: today's count, the month's count, the effective limits, lifetime
+total, first and last seen. The endpoint is disabled unless `ADMIN_TOKEN` is set.
+
+A device over its cap gets HTTP 429 and the app says so plainly; prices already
+fetched keep working, since they are cached on the phone for 7 days.
+
 ## Cache
 
 Results are cached for `CACHE_TTL_SECONDS` (7 days, matching the app's own

@@ -3,3 +3,5 @@ node_modules/
 *.log
 cache.json
 cache.json.tmp
+devices.json
+devices.json.tmp

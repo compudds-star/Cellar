@@ -10,7 +10,7 @@
 // See README.md for deployment.
 
 import express from "express";
-import { readFileSync, writeFileSync, renameSync } from "fs";
+import { readFileSync, writeFileSync, renameSync, statSync } from "fs";
 
 const {
   PORT = "8787",
@@ -27,12 +27,23 @@ const {
   CACHE_TTL_SECONDS = "604800",      // 7 days — matches the app's per-wine TTL
   CACHE_FILE = "./cache.json",       // survives restarts; "" keeps the cache in memory only
   RATE_LIMIT_PER_MIN = "60",
+  DEVICES_FILE = "./devices.json",   // per-install roster + usage counters
+  DEVICE_DAILY_LIMIT = "100",        // billable lookups per device per day (0 = unlimited)
+  DEVICE_MONTHLY_LIMIT = "300",      // ...and per calendar month (0 = unlimited)
+  MAX_DEVICES = "10",                // how many installs may self-enrol
+  ALLOW_UNKNOWN_DEVICES = "1",       // 0 = only ids already in the file may look up
+  REQUIRE_DEVICE = "0",              // 1 = reject requests with no device header
+  OWNER_DEVICE = "",                 // this id is enrolled unlimited on startup
+  ADMIN_TOKEN = "",                  // bearer token for GET /admin/devices
 } = process.env;
 
 const CACHE_TTL_MS = Number(CACHE_TTL_SECONDS) * 1000;
 const WS_GRACE_MS = Number(WS_GRACE_SECONDS) * 1000;
 const WS_TIMEOUT_MS = Number(WS_TIMEOUT_SECONDS) * 1000;
 const RATE_LIMIT = Number(RATE_LIMIT_PER_MIN);
+const DAILY_LIMIT = Number(DEVICE_DAILY_LIMIT);
+const MONTHLY_LIMIT = Number(DEVICE_MONTHLY_LIMIT);
+const DEVICE_CAP = Number(MAX_DEVICES);
 
 const app = express();
 app.disable("x-powered-by");
@@ -119,16 +130,193 @@ function saveCacheSoon() {
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, () => {
     saveCacheNow();              // a restart keeps whatever the last lookups found
+    saveDevicesNow();
     process.exit(0);
   });
 }
 
+// ---- Per-device enrolment and quotas ---------------------------------------
+// Every install sends `X-Cellar-Device: Ryc#j0` — a short id generated once and
+// kept in its Keychain. Two reasons it exists: you can see which friend is
+// spending your provider credits, and you can cap or cut off one of them without
+// rotating the token everyone shares.
+//
+// Only a lookup that actually reaches the provider counts against a quota — a
+// cache hit costs nothing, so it is never charged to anyone. The file is re-read
+// whenever it changes on disk, so raising a cap or revoking a device takes effect
+// without a restart; the server owns the counters, you own the limits.
+const devices = new Map(); // id -> { name, dailyLimit, monthlyLimit, revoked, day, dayCount, … }
+let devicesMtime = 0;
+
+const dayKey = (d = new Date()) => d.toISOString().slice(0, 10);   // 2026-09-22
+const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);  // 2026-09
+
+/// Ids are opaque to us; just keep them short, printable, and log-safe.
+function validDeviceId(id) {
+  return typeof id === "string" && /^[A-Za-z0-9#_-]{4,32}$/.test(id);
+}
+
+function blankDevice(extra = {}) {
+  return {
+    name: "",
+    dailyLimit: null,          // null = fall back to DEVICE_DAILY_LIMIT
+    monthlyLimit: null,
+    revoked: false,
+    firstSeen: new Date().toISOString(),
+    lastSeen: null,
+    day: dayKey(), dayCount: 0,
+    month: monthKey(), monthCount: 0,
+    total: 0,
+    ...extra,
+  };
+}
+
+function loadDevices() {
+  if (!DEVICES_FILE) return;
+  try {
+    const stat = statSync(DEVICES_FILE);
+    if (stat.mtimeMs === devicesMtime) return;      // unchanged since we last read/wrote
+    devicesMtime = stat.mtimeMs;
+    const stored = JSON.parse(readFileSync(DEVICES_FILE, "utf8"));
+    for (const [id, rec] of Object.entries(stored?.devices || {})) {
+      if (!validDeviceId(id) || !rec) continue;
+      const live = devices.get(id);
+      // You own the limits (edit them in the file); the server owns the counters,
+      // so an edit made while it is running can't roll usage back to zero.
+      devices.set(id, {
+        ...blankDevice(),
+        ...rec,
+        ...(live ? { day: live.day, dayCount: live.dayCount, month: live.month,
+                     monthCount: live.monthCount, total: live.total,
+                     lastSeen: live.lastSeen, firstSeen: live.firstSeen } : {}),
+      });
+    }
+    console.log(`devices: ${devices.size} enrolled`);
+  } catch (err) {
+    if (err?.code !== "ENOENT") console.error("devices load failed:", err?.message || "error");
+  }
+}
+
+let devicesTimer = null;
+function saveDevicesNow() {
+  if (!DEVICES_FILE) return;
+  devicesTimer = null;
+  try {
+    const tmp = `${DEVICES_FILE}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ devices: Object.fromEntries(devices) }, null, 2));
+    renameSync(tmp, DEVICES_FILE);
+    devicesMtime = statSync(DEVICES_FILE).mtimeMs;  // our own write isn't an outside edit
+  } catch (err) {
+    console.error("devices save failed:", err?.message || "error");
+  }
+}
+function saveDevicesSoon() {
+  if (!DEVICES_FILE || devicesTimer) return;
+  devicesTimer = setTimeout(saveDevicesNow, 2000);
+  devicesTimer.unref?.();
+}
+
+/// Roll the day/month counters over when the clock passes midnight / month end.
+function rollCounters(rec) {
+  const today = dayKey(), month = monthKey();
+  if (rec.day !== today) { rec.day = today; rec.dayCount = 0; }
+  if (rec.month !== month) { rec.month = month; rec.monthCount = 0; }
+}
+
+const effectiveLimit = (own, fallback) => (own === null || own === undefined ? fallback : Number(own));
+
+/// May this device make a lookup that could cost money? Enrols a new one the
+/// first time it appears, up to MAX_DEVICES.
+function deviceCheck(id) {
+  loadDevices();
+  if (!id) {
+    return REQUIRE_DEVICE === "1"
+      ? { ok: false, status: 400, error: "device_required" }
+      : { ok: true, rec: null };
+  }
+  if (!validDeviceId(id)) return { ok: false, status: 400, error: "bad_device_id" };
+
+  let rec = devices.get(id);
+  if (!rec) {
+    if (ALLOW_UNKNOWN_DEVICES !== "1") return { ok: false, status: 403, error: "device_not_enrolled" };
+    if (DEVICE_CAP > 0 && devices.size >= DEVICE_CAP) {
+      return { ok: false, status: 403, error: "device_limit_reached" };
+    }
+    rec = blankDevice();
+    devices.set(id, rec);
+    console.log(`devices: enrolled ${id} (${devices.size}/${DEVICE_CAP || "∞"})`);
+    saveDevicesSoon();
+  }
+  if (rec.revoked) return { ok: false, status: 403, error: "device_revoked" };
+  return { ok: true, rec };
+}
+
+/// Checked only once a lookup is about to reach the provider, so a cache hit is
+/// free and a friend is never charged for a wine someone else already priced.
+function quotaCheck(rec) {
+  if (!rec) return { ok: true };
+  rollCounters(rec);
+  const daily = effectiveLimit(rec.dailyLimit, DAILY_LIMIT);
+  const monthly = effectiveLimit(rec.monthlyLimit, MONTHLY_LIMIT);
+  if (daily > 0 && rec.dayCount >= daily) {
+    return { ok: false, status: 429, error: "daily_limit_reached", limit: daily };
+  }
+  if (monthly > 0 && rec.monthCount >= monthly) {
+    return { ok: false, status: 429, error: "monthly_limit_reached", limit: monthly };
+  }
+  return { ok: true };
+}
+
+/// Called only when a lookup actually reaches the provider — i.e. costs money.
+function noteBillable(rec) {
+  if (!rec) return;
+  rollCounters(rec);
+  rec.dayCount += 1;
+  rec.monthCount += 1;
+  rec.total += 1;
+  rec.lastSeen = new Date().toISOString();
+  saveDevicesSoon();
+}
+
+loadDevices();
+if (OWNER_DEVICE && validDeviceId(OWNER_DEVICE) && !devices.get(OWNER_DEVICE)) {
+  devices.set(OWNER_DEVICE, blankDevice({ name: "owner", dailyLimit: 0, monthlyLimit: 0 }));
+  saveDevicesSoon();
+}
+
 app.get("/health", (_req, res) => res.json({ ok: true, provider: PROVIDER }));
+
+// Who is using your provider credits, and how much. Read-only; change limits by
+// editing DEVICES_FILE (it is picked up live).
+app.get("/admin/devices", (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).json({ error: "not_found" });
+  const m = /^Bearer\s+(.+)$/.exec(req.headers.authorization || "");
+  const given = Buffer.from(m?.[1] || "");
+  const want = Buffer.from(ADMIN_TOKEN);
+  if (given.length !== want.length || !timingSafeEqual(given, want)) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  loadDevices();
+  const rows = [...devices.entries()].map(([id, rec]) => {
+    rollCounters(rec);
+    return {
+      id, name: rec.name, revoked: rec.revoked,
+      today: rec.dayCount, dailyLimit: effectiveLimit(rec.dailyLimit, DAILY_LIMIT),
+      thisMonth: rec.monthCount, monthlyLimit: effectiveLimit(rec.monthlyLimit, MONTHLY_LIMIT),
+      total: rec.total, firstSeen: rec.firstSeen, lastSeen: rec.lastSeen,
+    };
+  });
+  res.json({ devices: rows, defaults: { daily: DAILY_LIMIT, monthly: MONTHLY_LIMIT },
+             cacheEntries: cache.size });
+});
 
 app.get("/valuation", async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
   if (!tokenOK(req.headers.authorization)) return res.status(401).json({ error: "unauthorized" });
+
+  const access = deviceCheck(String(req.headers["x-cellar-device"] || "").trim());
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
 
   const lwin = String(req.query.lwin || "").trim();
   const q = String(req.query.q || "").trim();
@@ -138,9 +326,13 @@ app.get("/valuation", async (req, res) => {
 
   const cacheKey = JSON.stringify({ lwin, q, vintage, currency, PROVIDER });
   const cached = cacheGet(cacheKey);
-  if (cached) return res.json(cached);
+  if (cached) return res.json(cached);       // free: nobody's quota is touched
+
+  const quota = quotaCheck(access.rec);
+  if (!quota.ok) return res.status(quota.status).json({ error: quota.error, limit: quota.limit });
 
   try {
+    noteBillable(access.rec);                // this one is going to the provider
     const body = await lookup({ lwin, q, vintage, currency },
                               (late) => cacheSet(cacheKey, late));
     cacheSet(cacheKey, body);
