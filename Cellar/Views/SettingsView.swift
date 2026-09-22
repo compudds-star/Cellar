@@ -82,17 +82,23 @@ struct SettingsView: View {
                     // Deliberately quiet rather than hidden: when lookups stop working
                     // the first question is "what's your device id?", and neither side
                     // can answer that about an invisible field.
-                    HStack(spacing: 6) {
-                        Text("Device ID")
-                        Text(deviceID).monospaced()
-                        Button {
-                            UIPasteboard.general.string = deviceID
-                            copiedID = true
-                        } label: {
-                            Image(systemName: copiedID ? "checkmark" : "doc.on.doc")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text("Device ID")
+                            Text(deviceID).monospaced()
+                            Button {
+                                UIPasteboard.general.string = deviceID
+                                copiedID = true
+                            } label: {
+                                Image(systemName: copiedID ? "checkmark" : "doc.on.doc")
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Copy device ID")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Copy device ID")
+                        // Which build someone is on — the other half of any
+                        // "it doesn't work on my phone" conversation.
+                        Text(AppVersion.display)
+                            .accessibilityIdentifier("app-version")
                     }
                     .font(.caption2).foregroundStyle(.secondary)
                 }

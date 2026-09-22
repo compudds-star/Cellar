@@ -425,6 +425,12 @@ final class CellarSmokeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 3))
 
         app.navigationBars["Invite a friend"].buttons["Settings"].tap()
+        // The build someone is running, under their device id — at the foot of a
+        // long form, so scroll to it first.
+        let version = app.staticTexts["app-version"]
+        for _ in 0..<4 where !version.exists { app.swipeUp() }
+        XCTAssertTrue(version.waitForExistence(timeout: 5), "no version line in Settings")
+        XCTAssertTrue(version.label.hasPrefix("Version "), "unexpected version line: \(version.label)")
         app.navigationBars["Settings"].buttons["Cancel"].tap()
     }
 
