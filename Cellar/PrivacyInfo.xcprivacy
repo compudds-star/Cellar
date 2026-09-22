@@ -26,9 +26,42 @@
 		<dict>
 			<!-- The per-install id ("Ryc#j0") sent as X-Cellar-Device so the
 			     endpoint's owner can meter and cap usage. Random per install,
-			     tied to no account, name or hardware identifier. -->
+			     tied to no account, name or hardware identifier — but it is
+			     persistent and identifies the device, and Apple counts data tied
+			     to a device as linked, so this is declared linked. -->
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Lookup counts kept per device on the pricing service, so one
+			     install can't exhaust a paid API allowance for everyone. A record
+			     of feature use, held against the id above. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- The pricing service caches answers for seven days and the cache
+			     key holds the wine's name and vintage. That outlives the request,
+			     so it is declared — but the cache is global and tied to no device
+			     or person, hence not linked. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

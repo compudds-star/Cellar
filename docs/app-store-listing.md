@@ -95,3 +95,28 @@ provider image URL (`RemoteValuationClient` passes `imageURL: nil`, and the
 thumbnail and detail views have no remote branch), and the proxy strips `image`
 from every response, including cached ones written before that change. If you
 ever switch to a licensed image source, that's the code to revisit.
+
+---
+
+## App Privacy answers (App Store Connect)
+
+"Do you or your third-party partners collect data from this app?" → **Yes**.
+These must match `Cellar/PrivacyInfo.xcprivacy`; change one and change the other.
+
+| Data type | Linked to user | Tracking | Purpose |
+|---|---|---|---|
+| Identifiers → **Device ID** | Yes | No | App Functionality |
+| Usage Data → **Product Interaction** | Yes | No | App Functionality |
+| **Other Data** | No | No | App Functionality |
+
+Device ID is the per-install `Ryc#j0` code, stored server-side with lookup counts
+— persistent and device-identifying, which is what "linked" means to Apple, even
+though it is attached to no account, name or person. Product Interaction is those
+counts. Other Data is the wine name and vintage sitting in the proxy's seven-day
+response cache: past "serviced in real time", so declared, but keyed to no device
+and therefore not linked.
+
+Not declared, and why: **Location** goes to Apple Maps through MapKit and never to
+our server (a first-party framework is not a third-party partner); **photos and
+user content** never leave the device; **prices paid** stay on the device;
+there is no analytics, advertising or crash SDK of any kind.
