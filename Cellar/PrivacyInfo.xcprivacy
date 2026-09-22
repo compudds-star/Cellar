@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest. App Store submission requires one for the "required reason"
+  APIs below, and its contents must agree with the privacy answers given in App
+  Store Connect.
+
+  The cellar itself is never collected: wines, bottles, photos, notes and
+  locations stay in the on-device SwiftData store. What leaves the phone is a
+  price lookup — the wine's name/vintage and this install's device id — sent to
+  the pricing endpoint the user configures. The wine query is used to answer the
+  request and is not stored against the device; the device id IS persisted
+  server-side as a usage counter, so it is declared as collected below.
+
+  Turning pricing off (blank endpoint in Settings) means nothing leaves at all.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<!-- The per-install id ("Ryc#j0") sent as X-Cellar-Device so the
+			     endpoint's owner can meter and cap usage. Random per install,
+			     tied to no account, name or hardware identifier. -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- Settings, new-bottle defaults and the pricing endpoint, shared with
+			     the Cellar share extension through the app group. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
