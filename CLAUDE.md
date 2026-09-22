@@ -92,7 +92,8 @@ Cellar/                      app source (Swift)
                             WineDetailView, AddWineFlow, WishlistView, WhereToBuyView,
                             CellarDashboardView (value-by-type bars + export menu),
                             SettingsView (new-bottle defaults: collection, wine/spirit sizes;
-                            pricing endpoint+key; device ID), LWINMatchView, ScanSheet,
+                            pricing endpoint+key; device ID), InviteFriendView (QR +
+                            link that sets up a friend's pricing), LWINMatchView, ScanSheet,
                             ShareSheet, RatingAndThumbnail (StarRating/StarsInline/WineThumbnail),
                             BottleEditorView (add/edit bottles: price paid, date, storage, drink window),
                             PhotoEditorView (crop/rotate label photos; PhotoEditing = pure geometry),
@@ -128,7 +129,10 @@ proxy/                      Node 18+ pricing proxy for the user's Oracle host
   the proxy self-enrols it and caps billable lookups per device per day/month —
   cache hits are free. Limits live in `proxy/devices.json`, re-read live.
   Setup is a `cellar://configure?endpoint=…&token=…` link (`CFBundleURLTypes` in
-  Info.plist), which the app always confirms before applying. See
+  Info.plist), which the app always confirms before applying; Settings → Invite a
+  friend renders that link as a QR (token read from the Keychain, never a file)
+  and can send it. `ValuationSettings.bundledBaseURL` bakes the endpoint into the
+  build — the endpoint only; tokens never ship in the binary. See
   "Sharing the app with friends" in `proxy/README.md`.
 - **LWIN:** `Wine.lwin7` (7-digit wine identity) + `lwin11` (with vintage). The
   bundled `lwin_sample.csv` codes start at 9000001 and are **illustrative, not

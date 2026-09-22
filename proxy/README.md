@@ -183,16 +183,23 @@ to nobody, so a friend is never penalised for a wine someone else already priced
 
 ### Setting a friend up in one tap
 
-Send them a link (iMessage, email, a QR code — anything that opens on the phone):
+**Settings → Invite a friend** on a phone that is already working builds the link
+and draws it as a QR code, reading the token from that phone's Keychain. Scan it
+off the screen if they're with you, or send the code and link by message or mail
+if they aren't. The link is:
 
 ```
 cellar://configure?endpoint=https://prices.example.com&token=<PROXY_TOKEN>
 ```
 
-The app asks "Use this pricing server?", names the host, and applies it on
-confirm — no typing a URL into Settings. It refuses links the Settings field
-would refuse anyway (cleartext to a public host). You can also bake the endpoint
-into the build via `ValuationSettings.bundledBaseURL` so only the token travels.
+The receiving app asks "Use this pricing server?", names the host, and applies it
+on confirm — no typing a URL into Settings. It refuses links the Settings field
+would refuse anyway (cleartext to a public host). `ValuationSettings.bundledBaseURL`
+carries the endpoint in the build, so an invite only has to pass on the token.
+
+**That link is as sensitive as the token in it.** Anyone holding it can spend your
+provider credits (within their device's cap). If one gets out, rotate `PROXY_TOKEN`
+— every phone then needs a fresh invite, which is the point.
 
 ### Caps, and changing them
 

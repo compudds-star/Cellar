@@ -66,6 +66,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        InviteFriendView()
+                    } label: {
+                        Label("Invite a friend", systemImage: "person.badge.plus")
+                    }
+                } footer: {
+                    Text("Passes this pricing server on as a QR code or a link, so they don't have to type any of it.")
+                }
+
+                Section {
                     Text("Prices are cached per wine for 7 days, so a paid API is hit at most once per wine per week.")
                         .font(.caption).foregroundStyle(.secondary)
                 } footer: {

@@ -405,6 +405,29 @@ final class CellarSmokeUITests: XCTestCase {
         app.navigationBars["Edit wine"].buttons["Cancel"].tap()
     }
 
+    /// The invite screen renders a scannable code and offers to send it, so a friend
+    /// can be set up without typing an endpoint or a token.
+    func testInviteFriendShowsCodeAndCanShareIt() {
+        app.tabBars.buttons["Cellar"].tap()
+        app.navigationBars["Cellar"].buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5), "settings didn't open")
+
+        let invite = app.buttons["Invite a friend"]
+        XCTAssertTrue(invite.waitForExistence(timeout: 5), "no invite row in Settings")
+        invite.tap()
+
+        XCTAssertTrue(app.navigationBars["Invite a friend"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Setup QR code"].waitForExistence(timeout: 5), "QR code didn't render")
+        XCTAssertTrue(app.buttons["Share code and link"].exists, "no way to send the invite")
+
+        // Copying is the fallback when a chat app won't linkify cellar://.
+        app.buttons["Copy link"].tap()
+        XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 3))
+
+        app.navigationBars["Invite a friend"].buttons["Settings"].tap()
+        app.navigationBars["Settings"].buttons["Cancel"].tap()
+    }
+
     /// Settings defaults for new bottles: wine and spirit sizes drive the Add form.
     func testSettingsBottleSizeDefaults() {
         func setSizes(wine: String, spirits: String) {

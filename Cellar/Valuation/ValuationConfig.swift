@@ -27,6 +27,21 @@ struct ValuationConfig {
 
         /// Host shown in the confirmation prompt.
         var host: String { endpoint.host ?? endpoint.absoluteString }
+
+        /// The link that sets a friend's app up. The token rides in it, so it is as
+        /// sensitive as the token itself — see `InviteFriendView` for the warning
+        /// the sharing screen shows.
+        var url: URL? {
+            var comps = URLComponents()
+            comps.scheme = "cellar"
+            comps.host = "configure"
+            var items = [URLQueryItem(name: "endpoint", value: endpoint.absoluteString)]
+            if let token, !token.isEmpty {
+                items.append(URLQueryItem(name: "token", value: token))
+            }
+            comps.queryItems = items
+            return comps.url
+        }
     }
 
     /// Nil unless the link is a `configure` link carrying an endpoint the app would
@@ -51,6 +66,13 @@ struct ValuationConfig {
     static func apply(_ invite: Invite) {
         ValuationSettings.baseURL = invite.endpoint
         if let token = invite.token { APIKeyStore.save(token) }
+    }
+
+    /// What this device can hand to a friend: its own endpoint, and its token if
+    /// it has one. Nil when no pricing server is set up, so there is nothing to share.
+    static var shareableInvite: Invite? {
+        guard let endpoint = ValuationSettings.baseURL else { return nil }
+        return Invite(endpoint: endpoint, token: APIKeyStore.load())
     }
 
     /// Configured enough to attempt a lookup (endpoint present and acceptable).
@@ -95,10 +117,11 @@ struct ValuationConfig {
 enum ValuationSettings {
     private static let baseURLKey = "valuation.baseURL"
 
-    /// Baked into the build so a new install already knows where to look up prices
-    /// — the endpoint is not a secret (the token is, and that is not in here).
-    /// Leave empty to ship an app that starts with online pricing off.
-    static let bundledBaseURL = ""
+    /// Baked into the build so a new install already knows where to look up prices.
+    /// The endpoint is NOT a secret — the access token is, and it is never in here:
+    /// it reaches a phone through Settings or a `cellar://configure` link and lives
+    /// in the Keychain. Leave empty to ship with online pricing off.
+    static let bundledBaseURL = "https://cellar.orangeeaglesa.com"
 
     /// The endpoint in use. Never set → the bundled default; set to empty →
     /// deliberately off, which is how someone turns pricing off for good.

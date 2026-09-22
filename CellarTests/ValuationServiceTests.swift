@@ -125,4 +125,27 @@ final class ValuationServiceTests: XCTestCase {
         XCTAssertNotNil(ValuationConfig.invite(from: URL(string: "cellar://configure?endpoint=http://192.168.1.20:8787")!))
     }
 
+
+    func testInviteLinkRoundTripsThroughTheParser() throws {
+        let endpoint = try XCTUnwrap(URL(string: "https://cellar.example.com"))
+        let made = try XCTUnwrap(ValuationConfig.Invite(endpoint: endpoint, token: "s3cr3t/token+value").url)
+        XCTAssertEqual(made.scheme, "cellar")
+        // The token is escaped in the query, so characters like / and + survive.
+        let parsed = try XCTUnwrap(ValuationConfig.invite(from: made))
+        XCTAssertEqual(parsed.endpoint, endpoint)
+        XCTAssertEqual(parsed.token, "s3cr3t/token+value")
+
+        // No token on this device → a link that only sets the endpoint.
+        let bare = try XCTUnwrap(ValuationConfig.Invite(endpoint: endpoint, token: nil).url)
+        XCTAssertFalse(bare.absoluteString.contains("token"))
+        XCTAssertNil(try XCTUnwrap(ValuationConfig.invite(from: bare)).token)
+    }
+
+    func testInviteQRCodeRendersTheLink() throws {
+        let image = try XCTUnwrap(InviteQRCode.image(for: "cellar://configure?endpoint=https://a.example.com"))
+        XCTAssertGreaterThan(image.size.width, 100)
+        XCTAssertEqual(image.size.width, image.size.height)   // QR codes are square
+        XCTAssertNil(InviteQRCode.image(for: ""))             // nothing to encode
+    }
+
 }
