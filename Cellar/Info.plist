@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Vino Cellar</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -12,12 +14,6 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<!-- What people see on the home screen and in Settings. "Cellar" alone was
-	     taken on the App Store; the bundle id, target and product name stay as
-	     they are, since changing those would move the app group, the keychain
-	     items and the entitlements for no user-visible gain. -->
-	<key>CFBundleDisplayName</key>
-	<string>Vino Cellar</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

@@ -330,7 +330,7 @@ struct WineRow: View {
         HStack(alignment: .top, spacing: 12) {
             // A larger label than a thumbnail, with the critic score under it.
             VStack(spacing: 5) {
-                WineThumbnail(imageData: wine.labelImage, imageURL: wine.imageURL, type: wine.type,
+                WineThumbnail(imageData: wine.labelImage, type: wine.type,
                               width: 72, height: 116)
                 if let score = wine.communityScore {
                     ScoreBadge(score: score, large: true)

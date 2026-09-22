@@ -143,8 +143,10 @@ final class Wine {
     var typeRaw: String
     /// JPEG of the label the user scanned/added. Kept small (resized on save).
     @Attribute(.externalStorage) var labelImage: Data?
-    /// Fallback label image URL from the pricing database, shown when there's no
-    /// scanned photo. Defaulted (not an init param) — set by the pricing refresh.
+    /// Unused since the app stopped displaying provider label photography (they
+    /// belong to whoever took them). Kept, rather than removed, so existing stores
+    /// don't need a migration; a price refresh clears whatever an older build put
+    /// here.
     var imageURL: String? = nil
     var notes: String
     /// A manual override for the per-750mL estimated value. When set, it wins

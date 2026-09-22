@@ -75,3 +75,23 @@ Wine identity data is the Liv-ex LWIN database, used under CC BY 4.0.
 ```
 First release.
 ```
+
+---
+
+## Content rights declaration
+
+App Store Connect asks whether the app contains, shows or accesses third-party
+content. The answer is **Yes**, and this is what that covers:
+
+| Content | Basis |
+|---|---|
+| **LWIN wine identity database** (Liv-ex), bundled, ~205,000 wines and spirits | CC BY 4.0. The credit is shown in the app on the LWIN match screen. |
+| **Apple Maps** search for nearby wine shops | Apple Developer Program Licence Agreement. |
+| **Price estimates, critic scores and merchant offers** from the pricing service | Factual data points retrieved per request to answer the user's own query. Not stored or redistributed beyond the user's own device. |
+
+**Label photographs are deliberately not used.** A wine's picture is one the user
+scanned or chose; nothing remote is fetched or displayed. The app does not read a
+provider image URL (`RemoteValuationClient` passes `imageURL: nil`, and the
+thumbnail and detail views have no remote branch), and the proxy strips `image`
+from every response, including cached ones written before that change. If you
+ever switch to a licensed image source, that's the code to revisit.

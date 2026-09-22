@@ -75,11 +75,11 @@ struct ScoreBadge: View {
     }
 }
 
-/// Wine label image with a graceful fallback chain:
-/// scanned/added photo → database image URL → type-tinted placeholder.
+/// Wine label image: the photo you scanned or added, otherwise a type-tinted
+/// placeholder. It deliberately never loads a remote image — a provider's label
+/// photography isn't ours to display.
 struct WineThumbnail: View {
     let imageData: Data?
-    let imageURL: String?
     let type: WineType
     var width: CGFloat = 48
     var height: CGFloat = 64
@@ -89,14 +89,6 @@ struct WineThumbnail: View {
         Group {
             if let imageData, let ui = UIImage(data: imageData) {
                 Image(uiImage: ui).resizable().scaledToFill()
-            } else if let s = imageURL, let url = URL(string: s) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        placeholder
-                    }
-                }
             } else {
                 placeholder
             }

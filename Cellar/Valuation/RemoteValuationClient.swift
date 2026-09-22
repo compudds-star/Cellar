@@ -98,7 +98,11 @@ struct RemoteValuationClient: CombinedValuationService {
                                currency: dto.currency ?? "USD",
                                source: dto.source ?? sourceName,
                                score: dto.score,
-                               imageURL: dto.image)
+                               // The provider's label photographs belong to whoever
+                               // took them, so the app doesn't keep or show them. A
+                               // wine's picture is one you took. See the App Store
+                               // content-rights note in docs/app-store-listing.md.
+                               imageURL: nil)
     }
 
     private func offers(from dto: RemoteValuationDTO) -> [MerchantOffer] {

@@ -423,7 +423,9 @@ app.get("/valuation", async (req, res) => {
 
   const cacheKey = JSON.stringify({ lwin, q, vintage, currency, PROVIDER });
   const cached = cacheGet(cacheKey);
-  if (cached) return res.json(cached);       // free: nobody's quota is touched
+  // Entries cached before images were dropped still carry one, and a cached body
+  // is returned verbatim — so strip it here as well as at the point of building.
+  if (cached) return res.json({ ...cached, image: null });   // free: nobody's quota is touched
 
   const quota = quotaCheck(access.rec);
   if (!quota.ok) return res.status(quota.status).json({ error: quota.error, limit: quota.limit });
@@ -452,7 +454,12 @@ async function lookup(params, onLate = () => {}) {
 
 // The app's contract. Every adapter returns this shape.
 function contract({ average = null, min = null, max = null, currency = "USD", score = null, image = null, offers = [], source = null }) {
-  return { average, min, max, currency, score, image, offers, source };
+  // `image` is accepted from the adapters and then dropped on purpose: a label
+  // photograph belongs to whoever took it, and the app no longer displays one it
+  // didn't take. Nulled here so no provider path can leak a URL to any client,
+  // including builds older than this change.
+  void image;
+  return { average, min, max, currency, score, image: null, offers, source };
 }
 
 // ---- Mock: deterministic fake data so the app works end-to-end today --------

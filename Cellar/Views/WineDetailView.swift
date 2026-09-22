@@ -327,11 +327,6 @@ struct WineDetailView: View {
                 .accessibilityLabel("Label photo")
                 .accessibilityIdentifier("wineHeaderPhoto")
                 .accessibilityValue("\(Int(ui.size.width))×\(Int(ui.size.height))" as String)
-        } else if let s = wine.imageURL, let url = URL(string: s) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image { image.resizable().scaledToFill() }
-                else { headerPlaceholder }
-            }
         } else {
             headerPlaceholder
         }

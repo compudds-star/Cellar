@@ -57,8 +57,11 @@ enum ValuationCoordinator {
             snapshot.wine = wine
             context.insert(snapshot)
             if let score = result.score { wine.communityScore = score }
-            // Only fill a DB image when there's no scanned photo.
-            if wine.labelImage == nil, let img = result.imageURL { wine.imageURL = img }
+            // A provider's label photography is not ours to store or display, so
+            // nothing is written to wine.imageURL any more. Any URL saved by an
+            // older build is cleared here, and the field itself is kept only to
+            // avoid a store migration.
+            wine.imageURL = nil
         }
 
         // Replace prior remotely-fetched offers; keep it simple and idempotent.
