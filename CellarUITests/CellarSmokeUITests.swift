@@ -161,6 +161,33 @@ final class CellarSmokeUITests: XCTestCase {
         homeRow.tap()
         XCTAssertTrue(app.navigationBars[home].waitForExistence(timeout: 5), "collection breakdown didn't open")
         snapshot("15-collection-detail")
+
+        // The Cellar list files the same bottles under each place they're kept:
+        // Collection → Wine → style. One wine, two collections, so it appears twice.
+        app.tabBars.buttons["Cellar"].tap()
+        // That tab was left on a wine's page earlier in this test; the back button
+        // carries the previous title, so pop until the list itself is showing.
+        var hops = 0
+        while app.navigationBars.buttons["Cellar"].exists && hops < 3 {
+            app.navigationBars.buttons["Cellar"].tap()
+            hops += 1
+        }
+        XCTAssertTrue(app.navigationBars["Cellar"].waitForExistence(timeout: 5), "didn't get back to the list")
+        clearCellarSearch()
+        // The collection name also appears as a bottle's storage location, so take
+        // the first match rather than assuming the query is unique.
+        let homeHeading = app.staticTexts.matching(identifier: home).firstMatch
+        reveal(homeHeading)
+        XCTAssertTrue(homeHeading.waitForExistence(timeout: 5), "no Home heading on the Cellar list")
+        let beachHeading = app.staticTexts.matching(identifier: beach).firstMatch
+        reveal(beachHeading)
+        XCTAssertTrue(beachHeading.exists, "no Beach heading on the Cellar list")
+        reveal(homeHeading)
+        snapshot("16-cellar-by-collection")
+        // A section header is a stack of three lines; SwiftUI may expose them as one
+        // element, so match on containment rather than an exact label.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Wine"))
+                        .firstMatch.exists, "no Wine group heading")
     }
 
     private func chooseCollection(_ name: String) {

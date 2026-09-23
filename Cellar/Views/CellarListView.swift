@@ -32,33 +32,67 @@ struct CellarListView: View {
         .sorted(by: Wine.alphabeticalOrder)
     }
 
-    /// One section of the list. Wine styles (Red, White…) sit under a single bold
-    /// "Wine" heading carried by the first of them; each spirit is its own bold
-    /// heading. `categoryTitle` is set only on the section that carries the heading.
+    /// One section of the list. The list reads Collection → Wine or Spirits →
+    /// style, but a SwiftUI section has only one header, so each shelf carries the
+    /// headings it is the first to need: `collectionTitle` on the first shelf of a
+    /// collection, `groupTitle` on the first of that collection's wines or spirits.
     private struct Shelf: Identifiable {
+        let scope: CollectionScope
         let type: WineType
         let wines: [Wine]
-        let categoryTitle: String?
-        var id: WineType { type }
+        let collectionTitle: String?
+        let groupTitle: String?
+        /// Every wine in this collection's Wine (or Spirits) half — what the group
+        /// heading counts.
+        let groupWines: [Wine]
+        let id: String
         var isWineStyle: Bool { !type.isSpirit }
     }
 
-    /// Wine styles first in their usual order (Red, White, Rosé…), then the spirits
-    /// alphabetically. Producers are already in alphabetical order inside each.
-    private var shelves: [Shelf] {
-        let byType = Dictionary(grouping: filtered, by: \.type)
-        let styles = WineType.wines.filter { byType[$0] != nil }
-        let spirits = byType.keys.filter(\.isSpirit)
-            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
-        return styles.enumerated().map { index, type in
-            Shelf(type: type, wines: byType[type] ?? [], categoryTitle: index == 0 ? "Wine" : nil)
-        } + spirits.map { type in
-            Shelf(type: type, wines: byType[type] ?? [], categoryTitle: type.label)
-        }
+    /// Collections are only a heading when there is a choice to make: filter to one
+    /// and the name is already in the title, and with no collections at all there is
+    /// nothing to head.
+    private var showsCollectionHeadings: Bool { scope == .all && !collections.isEmpty }
+
+    /// Which collections the list is divided into, in name order, with unassigned
+    /// bottles last. A wine kept in two places appears under both, counted in each.
+    private var listScopes: [CollectionScope] {
+        guard showsCollectionHeadings else { return [scope] }
+        let candidates = collections.map { CollectionScope.collection($0) } + [.unassigned]
+        return candidates.filter { s in filtered.contains { !$0.inStockBottles(in: s).isEmpty } }
     }
 
-    /// Every listed wine (not spirit) — what the bold "Wine" heading counts.
-    private var wineStyleWines: [Wine] { filtered.filter { !$0.type.isSpirit } }
+    /// Collection, then wine styles in their usual order (Red, White, Rosé…), then
+    /// the spirits alphabetically. Producers are already alphabetical inside each.
+    private var shelves: [Shelf] {
+        var result: [Shelf] = []
+        for listScope in listScopes {
+            let here = filtered.filter { !$0.inStockBottles(in: listScope).isEmpty }
+            guard !here.isEmpty else { continue }
+            let byType = Dictionary(grouping: here, by: \.type)
+            let styles = WineType.wines.filter { byType[$0] != nil }
+            let spirits = byType.keys.filter(\.isSpirit)
+                .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+            let wineHalf = here.filter { !$0.type.isSpirit }
+            let spiritHalf = here.filter { $0.type.isSpirit }
+            var firstOfCollection = true
+
+            for (index, type) in (styles + spirits).enumerated() {
+                let isSpirit = type.isSpirit
+                let startsGroup = isSpirit ? (index == styles.count) : (index == 0)
+                result.append(Shelf(
+                    scope: listScope,
+                    type: type,
+                    wines: byType[type] ?? [],
+                    collectionTitle: firstOfCollection && showsCollectionHeadings ? listScope.title : nil,
+                    groupTitle: startsGroup ? (isSpirit ? "Spirits" : "Wine") : nil,
+                    groupWines: isSpirit ? spiritHalf : wineHalf,
+                    id: "\(listScope.title)|\(type.rawValue)"))
+                firstOfCollection = false
+            }
+        }
+        return result
+    }
 
     private var selectedWines: [Wine] { filtered.filter { selection.contains($0.id) } }
     /// In-stock bottles of the selected wines that a move would take (within the collection filter).
@@ -98,7 +132,7 @@ struct CellarListView: View {
                             Section {
                                 ForEach(shelf.wines) { wine in
                                     NavigationLink(value: wine) {
-                                        WineRow(wine: wine, scope: scope)
+                                        WineRow(wine: wine, scope: shelf.scope)
                                     }
                                 }
                                 // No delete buttons while selecting, so a mis-tap can't delete a wine.
@@ -229,29 +263,33 @@ struct CellarListView: View {
     @ViewBuilder
     private func shelfHeader(_ shelf: Shelf) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let category = shelf.categoryTitle {
+            if let collection = shelf.collectionTitle {
                 HStack(spacing: 6) {
-                    if !shelf.isWineStyle {
-                        Circle().fill(shelf.type.tint).frame(width: 8, height: 8)
-                    }
-                    Text(category).font(.headline.weight(.bold)).foregroundStyle(.primary)
-                    bottlesCaption(shelf.isWineStyle ? wineStyleWines : shelf.wines)
+                    Image(systemName: "archivebox.fill")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(collection).font(.title3.weight(.bold)).foregroundStyle(.primary)
+                    bottlesCaption(filtered.filter { !$0.inStockBottles(in: shelf.scope).isEmpty },
+                                   in: shelf.scope)
                 }
             }
-            // Spirits are their own category, so the bold line already names them.
-            if shelf.isWineStyle {
+            if let group = shelf.groupTitle {
                 HStack(spacing: 6) {
-                    Circle().fill(shelf.type.tint).frame(width: 8, height: 8)
-                    Text(shelf.type.label).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                    bottlesCaption(shelf.wines)
+                    Text(group).font(.headline.weight(.bold)).foregroundStyle(.primary)
+                    bottlesCaption(shelf.groupWines, in: shelf.scope)
                 }
-                .padding(.leading, 10)
+                .padding(.leading, shelf.collectionTitle == nil && !showsCollectionHeadings ? 0 : 10)
             }
+            HStack(spacing: 6) {
+                Circle().fill(shelf.type.tint).frame(width: 8, height: 8)
+                Text(shelf.type.label).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                bottlesCaption(shelf.wines, in: shelf.scope)
+            }
+            .padding(.leading, showsCollectionHeadings ? 20 : 10)
         }
     }
 
     /// "12 bottles" for a set of wines, counting only the collection in view.
-    private func bottlesCaption(_ wines: [Wine]) -> some View {
+    private func bottlesCaption(_ wines: [Wine], in scope: CollectionScope) -> some View {
         let bottles = wines.reduce(0) { $0 + $1.inStockBottles(in: scope).count }
         return Text("\(bottles) bottle\(bottles == 1 ? "" : "s")")
             .font(.caption).foregroundStyle(.secondary)

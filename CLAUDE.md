@@ -91,8 +91,10 @@ Cellar/                      app source (Swift)
 ├── Notifications/          DrinkWindowNotifier (local notifications)
 ├── Resources/lwin_sample.csv   20-wine sample (illustrative codes; replace with real)
 └── Views/                  RootTabView (Cellar/Wishlist/Drank/Value tabs; applies
-                            cellar://configure links), CellarListView (sections: a bold
-                            "Wine" heading over the styles, then each spirit), DrankView
+                            cellar://configure links), CellarListView (sections read
+                            Collection → Wine|Spirits → style, alphabetical by producer;
+                            a wine kept in two collections appears under both, counted
+                            per collection), DrankView
                             (wines with no stock left; back to cellar or wishlist),
                             WineDetailView, AddWineFlow, WishlistView, WhereToBuyView,
                             CellarDashboardView (value-by-type bars + export menu),

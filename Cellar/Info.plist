@@ -4,12 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<!-- What people see on the home screen and in Settings. "Cellar" alone was
-	     taken on the App Store; the bundle id, target and product name stay as
-	     they are, since changing those would move the app group, the keychain
-	     items and the entitlements for no user-visible gain. NOTE: a build has
-	     rewritten this file once, dropping comments and reordering keys — if the
-	     comments vanish again, check what is touching it. -->
 	<key>CFBundleDisplayName</key>
 	<string>Vino Cellar</string>
 	<key>CFBundleExecutable</key>
