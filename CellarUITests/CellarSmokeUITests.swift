@@ -389,7 +389,7 @@ final class CellarSmokeUITests: XCTestCase {
         }
         share.tap()
         let cellarActivity = safari.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == 'Cellar' AND (elementType == %d OR elementType == %d)",
+            .matching(NSPredicate(format: "label == 'Vino Cellar' AND (elementType == %d OR elementType == %d)",
                                   XCUIElement.ElementType.cell.rawValue, XCUIElement.ElementType.button.rawValue))
             .firstMatch
         XCTAssertTrue(cellarActivity.waitForExistence(timeout: 10), "Cellar isn't in the share sheet")
