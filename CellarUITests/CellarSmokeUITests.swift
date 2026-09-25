@@ -113,11 +113,12 @@ final class CellarSmokeUITests: XCTestCase {
     func testCollectionsTotalSeparately() {
         let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
         let home = "Home \(stamp)", beach = "Beach \(stamp)", producer = "Coll \(stamp)"
+        let draftName = "Gleneagles \(stamp)"
 
         app.tabBars.buttons["Value"].tap()
         tap(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'collections'")).firstMatch)
         XCTAssertTrue(app.navigationBars["Collections"].waitForExistence(timeout: 5), "collections screen didn't open")
-        for name in [home, beach] {
+        for name in [home, draftName] {
             app.navigationBars["Collections"].buttons["New collection"].tap()
             let field = app.alerts.textFields.firstMatch
             XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -125,7 +126,24 @@ final class CellarSmokeUITests: XCTestCase {
             field.typeText(name)
             app.alerts.buttons["Create"].tap()
         }
-        XCTAssertTrue(app.staticTexts[beach].waitForExistence(timeout: 5), "collection not created")
+        // Tapping a collection renames it.
+        func collectionRow(_ name: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        }
+        // Earlier runs leave collections behind, so the row may be further down.
+        let draftRow = collectionRow(draftName)
+        reveal(draftRow)
+        XCTAssertTrue(draftRow.waitForExistence(timeout: 5), "collection not created")
+        draftRow.tap()
+        let renameField = app.alerts.textFields.firstMatch
+        XCTAssertTrue(renameField.waitForExistence(timeout: 5), "tapping a collection didn't offer a rename")
+        renameField.tap()
+        renameField.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: draftName.count + 2))
+        renameField.typeText(beach)
+        app.alerts.buttons["Save"].tap()
+        reveal(collectionRow(beach))
+        XCTAssertTrue(collectionRow(beach).waitForExistence(timeout: 5), "collection not renamed")
+        XCTAssertFalse(collectionRow(draftName).exists, "old collection name still shown")
         snapshot("13-collections")
         app.navigationBars["Collections"].buttons.firstMatch.tap()
 

@@ -51,30 +51,42 @@ struct CollectionsView: View {
                     Text("Name a collection for each place you keep bottles, like Home or Beach house.")
                 }
             }
-            ForEach(collections) { collection in
-                let stats = CellarStats(wines: owned, scope: .collection(collection))
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(collection.name)
-                        Text("\(stats.bottleCount) bottle\(stats.bottleCount == 1 ? "" : "s")")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(Money.string(stats.totalValue)).foregroundStyle(.secondary)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        deleting = collection
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+            Section {
+                ForEach(collections) { collection in
+                    let stats = CellarStats(wines: owned, scope: .collection(collection))
                     Button {
-                        nameText = collection.name
-                        renaming = collection
+                        rename(collection)
                     } label: {
-                        Label("Rename", systemImage: "pencil")
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(collection.name)
+                                Text("\(stats.bottleCount) bottle\(stats.bottleCount == 1 ? "" : "s")")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(Money.string(stats.totalValue)).foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .tint(.blue)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Renames the collection")
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            deleting = collection
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        Button {
+                            rename(collection)
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
+                }
+            } footer: {
+                if !collections.isEmpty {
+                    Text("Tap a collection to rename it. Swipe left to delete.")
                 }
             }
         }
@@ -114,6 +126,11 @@ struct CollectionsView: View {
         } message: {
             Text("Its bottles stay in your cellar without a collection.")
         }
+    }
+
+    private func rename(_ collection: CellarCollection) {
+        nameText = collection.name
+        renaming = collection
     }
 }
 
