@@ -73,11 +73,15 @@ iPhone, iOS 18 or later.
 Wine identity data is the Liv-ex LWIN database, used under CC BY 4.0.
 ```
 
-## What's New (for version 1.1)
+## What's New (for version 1.2)
 
 ```
 Import an order: take screenshots of a merchant's order email in Gmail, Mail or any app — or paste its text — and Vino Cellar adds every wine with the date bought, the price paid and how many bottles. Choose which collection each bottle goes to, or split them between places. Find it under + or the envelope on the Cellar tab.
+```
 
+## What's New (for version 1.1)
+
+```
 Your cellar list is now organised by where your bottles live: each collection first, then Wine or Spirits, then style — Red, White, Whisky and so on.
 
 A wine you keep in two places now appears under each, with that collection's own bottle count and value. Filter to a single collection, or don't use collections at all, and the list reads just as it did before.
