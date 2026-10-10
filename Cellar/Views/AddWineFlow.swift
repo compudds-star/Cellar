@@ -54,6 +54,7 @@ struct AddWineFlow: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var editingPhoto = false
     @State private var takingPhoto = false
+    @State private var importingOrder = false
     @State private var didAutoStartScanner = false
     @State private var collection: CellarCollection?
 
@@ -119,6 +120,11 @@ struct AddWineFlow: View {
                             Label(labelImage == nil ? "Take label photo" : "Retake label photo",
                                   systemImage: "camera")
                         }
+                    }
+                    Button {
+                        importingOrder = true
+                    } label: {
+                        Label("Import an order email…", systemImage: "envelope.badge")
                     }
                     if let labelImage, let ui = UIImage(data: labelImage) {
                         Image(uiImage: ui).resizable().scaledToFit().frame(maxHeight: 160)
@@ -288,6 +294,10 @@ struct AddWineFlow: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }.disabled(!canSave)
                 }
+            }
+            .sheet(isPresented: $importingOrder) {
+                // A finished import has added the wines, so this form has nothing left to do.
+                OrderImportView(onImported: { dismiss() })
             }
             .sheet(isPresented: $showingScanner) {
                 ScanSheet { parsed, image in

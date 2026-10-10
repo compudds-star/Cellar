@@ -37,6 +37,15 @@ If the text is too damaged to identify the bottle, the form offers "Read the pho
 instead" — that is the only path that sends a picture, and only when tapped. No
 credentials are needed for either.
 
+IMPORTING AN ORDER
+Cellar tab → + → "Import an order email…" (or the envelope at the top left). Take a
+screenshot of any wine merchant's order confirmation and choose it with "Choose
+screenshots…", or copy an order's text and tap Paste. The text is recognised on
+the phone; only that text is sent to the same service, which returns the wines,
+quantities and prices for the user to check before anything is saved. Pictures of
+each bottle come from the email or a web search. The app never accesses a mailbox
+or an email account.
+
 WORKS WITHOUT A NETWORK
 Online pricing is optional. With it off (Settings → Pricing endpoint → clear the
 field), the whole app still works: label scanning, the bundled 205,000-wine
@@ -48,11 +57,14 @@ The cellar itself never leaves the device: wines, bottles, photos, notes and any
 location use stay in an on-device store. A price lookup sends only the wine's name
 and vintage plus a random per-install identifier, which the pricing service counts
 against a usage limit. Scanning sends the recognised text; a label photo is sent
-only if the user taps "Read the photo instead". There is no analytics SDK and no
+only if the user taps "Read the photo instead". Importing an order sends the
+recognised text of the order the user chose; screenshots themselves stay on the
+device. There is no analytics SDK and no
 third-party SDK of any kind.
 
 CAMERA / PHOTOS / LOCATION
-Camera and photo library are used only to read a wine label (on-device Vision OCR).
+Camera and photo library are used only to read a wine label or the screenshots of
+an order the user picks (on-device Vision OCR).
 Location is requested only when you tap "Where to buy" → "Nearby stores", to find
 wine shops near you; it is never stored or transmitted.
 

@@ -15,6 +15,8 @@ struct OrderImportView: View {
 
     /// An email that arrived from the share sheet; nil starts at the paste step.
     var email: OrderEmail?
+    /// Called once the bottles are saved and the person has closed the summary.
+    var onImported: (() -> Void)?
 
     @State private var reading = false
     @State private var error: String?
@@ -76,7 +78,10 @@ struct OrderImportView: View {
                 if let email { await read(email) }
             }
             .alert("Imported", isPresented: Binding(get: { saved != nil }, set: { if !$0 { saved = nil } })) {
-                Button("OK") { dismiss() }
+                Button("OK") {
+                    dismiss()
+                    onImported?()
+                }
             } message: {
                 let r = saved ?? .init()
                 Text("\(r.bottles) bottle\(r.bottles == 1 ? "" : "s") added\(r.wines > 0 ? ", \(r.wines) new wine\(r.wines == 1 ? "" : "s")" : ""). Prices are being looked up.")

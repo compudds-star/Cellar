@@ -53,6 +53,9 @@ Set a drinking window and Vino Cellar reminds you when a bottle enters it. Bottl
 MORE THAN ONE PLACE
 Collections keep the beach house separate from the rack in the basement, each with its own total. The cellar list files every bottle by where it's kept, then wine or spirits, then style — so a wine you keep in two places shows up under both, with each place's own count and value.
 
+BRING IN WHAT YOU BOUGHT
+Import a whole order at once. Take screenshots of the merchant's order email — from Gmail, Mail or any app — or paste its text, and Vino Cellar lists every wine with the date bought, the price paid per bottle and how many. Check the lines, choose which collection each bottle goes to, and import. Each wine gets a bottle photo, and a wine you already own simply gets the new bottles. Vino Cellar never opens your mailbox.
+
 YOUR NOTES, YOUR RATINGS
 Dated tasting notes and a five-star rating per wine. A wishlist for the bottles you don't own yet — move one into the cellar the day you buy it.
 
@@ -63,7 +66,7 @@ FINDING A BOTTLE
 Optional online pricing can fetch estimates, critic scores and merchant offers, and show wine shops near you with directions. Fair-use limits apply. Turn it off and everything else still works.
 
 BUILT TO STAY YOURS
-No account. No sign-up. No analytics, no advertising, no tracking of any kind, and no third-party SDKs. Your cellar lives on your iPhone and is never uploaded. Only two things ever leave it: the name and vintage of a wine you ask to price, and the text read off a label you scan, so it can be sorted into producer, wine and vintage. The label photo stays on your phone — unless a label is too hard to read and you tap to send the picture, which is used for that reading and not kept.
+No account. No sign-up. No analytics, no advertising, no tracking of any kind, and no third-party SDKs. Your cellar lives on your iPhone and is never uploaded. Only what you choose to have read ever leaves it: the name and vintage of a wine you ask to price, the text read off a label you scan, and the text of an order you import, so each can be sorted into producer, wine and vintage. Screenshots and label photos are read on your phone — a label picture is sent only if it's too hard to read and you tap to send it, and it's used for that reading and not kept.
 
 iPhone, iOS 18 or later.
 
@@ -73,9 +76,14 @@ Wine identity data is the Liv-ex LWIN database, used under CC BY 4.0.
 ## What's New (for version 1.1)
 
 ```
+Import an order: take screenshots of a merchant's order email in Gmail, Mail or any app — or paste its text — and Vino Cellar adds every wine with the date bought, the price paid and how many bottles. Choose which collection each bottle goes to, or split them between places. Find it under + or the envelope on the Cellar tab.
+
 Your cellar list is now organised by where your bottles live: each collection first, then Wine or Spirits, then style — Red, White, Whisky and so on.
 
 A wine you keep in two places now appears under each, with that collection's own bottle count and value. Filter to a single collection, or don't use collections at all, and the list reads just as it did before.
+
+
+Tap a collection to rename it.
 ```
 
 ## What's New (for version 1.0)
