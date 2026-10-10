@@ -7,6 +7,7 @@ struct CellarListView: View {
     private var wines: [Wine]
 
     @State private var showingAdd = false
+    @State private var showingOrderImport = false
     @State private var showingSettings = false
     @State private var searchText = ""
     @State private var typeFilter: WineType?
@@ -121,10 +122,11 @@ struct CellarListView: View {
                     ContentUnavailableView {
                         Label("Your cellar is empty", systemImage: "wineglass")
                     } description: {
-                        Text("Scan a label or add a wine by hand to get started.")
+                        Text("Scan a label, add a wine by hand, or import an order email to get started.")
                     } actions: {
                         Button("Add wine") { showingAdd = true }
                             .buttonStyle(.borderedProminent)
+                        Button("Import order") { showingOrderImport = true }
                     }
                 } else {
                     List(selection: $selection) {
@@ -188,6 +190,11 @@ struct CellarListView: View {
                         }
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingOrderImport = true } label: {
+                        Label("Import order", systemImage: "envelope.badge")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     if wines.contains(where: { !$0.isWishlist && !$0.isDrank }) {
                         Button(editMode.isEditing ? "Done" : "Select") {
@@ -225,6 +232,9 @@ struct CellarListView: View {
             }
             .sheet(isPresented: $showingAdd) {
                 AddWineFlow()
+            }
+            .sheet(isPresented: $showingOrderImport) {
+                OrderImportView()
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()

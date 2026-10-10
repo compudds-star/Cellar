@@ -113,6 +113,12 @@ CellarShare/                share extension ("Cellar" in the share sheet): reads
 Cellar/Shared/              compiled into app AND extension: WineType, PendingImport + SharedImportStore,
                             SharedWineParser (titles, Vivino messages, links); LabelParser is shared too
 Cellar/Import/              PendingImporter: app imports pending shares when it comes to the front
+                            OrderReader (/parse-order, /find-image, .eml/PDF files) + OrderImporter
+                            (OrderLineDraft: per-collection split; merges into same wine) behind
+                            OrderImportView ("Import order" envelope on the Cellar tab). Order emails
+                            come in as screenshots (read on the phone), paste, a file, or the share extension (SharedOrderStore in
+                            Cellar/Shared/OrderEmail.swift, which also holds the MIME/HTML reader).
+                            The app never reads a mailbox.
 CellarTests/                unit tests (LabelParser + real Vision OCR, CellarStats, LWIN, valuation, export)
 CellarUITests/              XCUITest click-through of all tabs (pricing test skips without a local proxy)
 scripts/import_lwin.py      converts the Liv-ex LWIN download (CSV/XLSX) into Resources/LWIN.csv

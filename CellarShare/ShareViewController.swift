@@ -1,6 +1,7 @@
 import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
+import PDFKit
 
 /// Share-sheet entry point: reads the shared page, message, link, or photo, lets you
 /// check the wine and pick Wishlist or Cellar, then leaves it for Cellar to import the
@@ -36,9 +37,14 @@ final class ShareImportModel: ObservableObject {
     @Published var loading = true
     @Published var error: String?
     @Published var imageData: Data?
+    /// What was shared, read as an order email — offered when it's long enough to be one.
+    @Published var order: OrderEmail?
+    /// Save it as an order (reviewed in the app) rather than as one wine.
+    @Published var treatAsOrder = false
 
     var canSave: Bool {
-        !loading && (!item.producer.trimmingCharacters(in: .whitespaces).isEmpty
+        if treatAsOrder { return !loading && !(order?.isEmpty ?? true) }
+        return !loading && (!item.producer.trimmingCharacters(in: .whitespaces).isEmpty
                      || !item.name.trimmingCharacters(in: .whitespaces).isEmpty
                      || imageData != nil)
     }
@@ -60,7 +66,14 @@ final class ShareImportModel: ObservableObject {
                 if imageData == nil, provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
                     imageData = await loadImage(provider)
                 }
+                if order == nil { order = await loadOrderFile(provider) }
             }
+        }
+        // A long message with prices in it is most likely an order confirmation.
+        if order == nil, let text, text.count > 150 { order = OrderEmail.from(raw: text) }
+        if let order {
+            treatAsOrder = OrderEmail.looksLikeOrder(order.text)
+                || order.images.count > 0 || !order.subject.isEmpty
         }
         // Vivino shares a message with the link inside it.
         if url == nil, let text { url = SharedWineParser.firstURL(in: text) }
@@ -74,6 +87,15 @@ final class ShareImportModel: ObservableObject {
     }
 
     func save() -> Bool {
+        if treatAsOrder, let order {
+            do {
+                try SharedOrderStore.save(order)
+                return true
+            } catch {
+                self.error = "Couldn't save for Vino Cellar: \(error.localizedDescription)"
+                return false
+            }
+        }
         item.vintage = Int(vintageText.trimmingCharacters(in: .whitespaces))
         do {
             try SharedImportStore.save(item, imageData: imageData)
@@ -82,6 +104,30 @@ final class ShareImportModel: ObservableObject {
             self.error = "Couldn't save for Vino Cellar: \(error.localizedDescription)"
             return false
         }
+    }
+
+    /// A saved message, web page or PDF (Mail's Print → Share) shared as a file.
+    private func loadOrderFile(_ provider: NSItemProvider) async -> OrderEmail? {
+        for type in [UTType.emailMessage, .pdf, .html] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+            guard let value = try? await provider.loadItem(forTypeIdentifier: type.identifier) else { continue }
+            let data: Data?
+            switch value {
+            case let url as URL: data = try? Data(contentsOf: url)
+            case let d as Data: data = d
+            case let string as String: data = Data(string.utf8)
+            default: data = nil
+            }
+            guard let data else { continue }
+            let email: OrderEmail
+            if type == .pdf {
+                guard let text = PDFDocument(data: data)?.string else { continue }
+                email = OrderEmail(text: OrderEmail.tidy(text))
+            } else {
+                email = OrderEmail.from(raw: String(decoding: data, as: UTF8.self))
+            }
+            if !email.isEmpty { return email }
+        }
+        return nil
     }
 
     private func loadImage(_ provider: NSItemProvider) async -> Data? {
@@ -126,7 +172,25 @@ struct ShareImportView: View {
                         ProgressView()
                         Text("Reading what you shared…").foregroundStyle(.secondary)
                     }
+                } else if model.treatAsOrder, let order = model.order {
+                    Section {
+                        Toggle("Order email", isOn: $model.treatAsOrder)
+                    } footer: {
+                        Text("Vino Cellar reads every bottle in this order, then lets you check them and choose collections before anything is added.")
+                    }
+                    Section(order.subject.isEmpty ? "Order" : order.subject) {
+                        Text(order.text.prefix(600) + (order.text.count > 600 ? "…" : ""))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let error = model.error {
+                        Text(error).foregroundStyle(.red)
+                    }
                 } else {
+                    if model.order != nil {
+                        Section {
+                            Toggle("Order email", isOn: $model.treatAsOrder)
+                        }
+                    }
                     Section {
                         Picker("Add to", selection: $model.item.destination) {
                             Text("Wishlist").tag(PendingImport.Destination.wishlist)

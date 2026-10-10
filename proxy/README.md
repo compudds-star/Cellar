@@ -60,6 +60,26 @@ Authorization: Bearer <PROXY_TOKEN>        # required only if PROXY_TOKEN is set
 `score` is the critic/community rating (0–100) the app shows per wine. Offers are
 sorted cheapest-first **in the app**, so order here doesn't matter.
 
+### Order emails (Import order)
+
+Both need `ANTHROPIC_API_KEY` (503 without it), use `LABEL_MODEL`, and count
+against the same per-device and global caps as a price lookup.
+
+```
+POST /parse-order   { "text": "…", "subject": "…", "from": "…", "date": "…",
+                      "images": [ {"url":"https://…","alt":"…"} ] }
+→ { "is_order":true, "merchant":"K&L", "order_date":"2026-09-12", "currency":"USD",
+    "items":[ {"producer":"…","name":"…","vintage":2019,"type":"red","quantity":6,
+               "unit_price":129.99,"bottle_ml":750,"critic_score":null,
+               "product_url":"https://…","image_url":"https://…", …} ] }
+
+GET /find-image?q={producer name}&vintage={year}
+→ { "image_urls": ["https://…"] }     # Claude web search + fetch; cached like prices
+```
+
+The app strips the email to text on the phone. It downloads the email's own
+bottle photo and calls `/find-image` only for lines that have none.
+
 ## Deploy on your Oracle host (Ubuntu + nginx + Let's Encrypt)
 
 ```bash
@@ -115,7 +135,9 @@ server.
 If the host already runs Caddy in Docker (as the Oracle Nextcloud box does),
 skip systemd/nginx and run the proxy as a container on Caddy's network:
 
-1. `rsync -az --exclude node_modules --exclude deploy proxy/ <host>:cellar-proxy/app/`
+1. `rsync -az --exclude node_modules --exclude deploy --exclude cache.json --exclude devices.json proxy/ <host>:cellar-proxy/app/`
+   (the excludes keep the server's price cache and device caps; to update later, rerun
+   this and `docker compose restart cellar-proxy`)
 2. Copy `deploy/docker-compose.yml` to `~/cellar-proxy/`, adjust `user:` and the
    network name, create `.env` (see the file header), install deps, `up -d`.
 3. Point the domain's A record at the server, append `deploy/Caddyfile.snippet`

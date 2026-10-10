@@ -7,6 +7,8 @@ struct RootTabView: View {
     @State private var importMessage: String?
     @State private var invite: ValuationConfig.Invite?
     @State private var inviteApplied: String?
+    /// An order email shared from Mail, waiting to be reviewed.
+    @State private var sharedOrder: OrderEmail?
 
     var body: some View {
         TabView {
@@ -55,6 +57,9 @@ struct RootTabView: View {
         } message: {
             Text("Prices will be looked up at \(inviteApplied ?? "") from now on.")
         }
+        .sheet(item: $sharedOrder) { email in
+            OrderImportView(email: email)
+        }
         .alert("Added from another app",
                isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
             Button("OK") { importMessage = nil }
@@ -68,6 +73,12 @@ struct RootTabView: View {
         guard !importing else { return }
         importing = true
         defer { importing = false }
+        // An order shared in from Mail opens for review; it can't be imported
+        // blind because the bottles need checking and placing in collections.
+        if sharedOrder == nil, let order = SharedOrderStore.load().first {
+            SharedOrderStore.remove(order)
+            sharedOrder = order
+        }
         let wines = await PendingImporter.importAll(into: context)
         guard !wines.isEmpty else { return }
         if wines.count == 1, let wine = wines.first {

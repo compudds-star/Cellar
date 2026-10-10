@@ -83,8 +83,23 @@
   </ul>
   <p>It does not send your cellar, your quantities, your prices paid, your notes,
   your ratings or your location, and it does not send a photo unless you ask it to
-  read one. Clear the endpoint in Settings and
+  read one, or an email unless you import one (below). Clear the endpoint in Settings and
   nothing leaves the device at all — the rest of the app keeps working.</p>
+
+  <h2>Order emails you import</h2>
+  <p>Vino Cellar never connects to your mailbox. If you choose to import an order
+  confirmation, by choosing screenshots of it, pasting it, picking the file, or
+  sharing it to Vino Cellar, the app sends that one email's text (screenshots are
+  read on your phone and only their text is sent), subject, sender, date and the addresses of
+  the pictures in it to the reading service, which uses Anthropic's Claude to list
+  the bottles, quantities and prices. The email is read and discarded; we don't
+  store it. You check every bottle before anything is added, and what you add is
+  stored on your phone like everything else. An order email can contain your name
+  and delivery address, so remove them before pasting if you prefer.</p>
+  <p>To find a picture of each wine, the app downloads the bottle photo from the
+  email. When the email has none, it sends the wine's producer, name and vintage
+  to the reading service, which searches the web for a photo and returns its
+  address for the app to download.</p>
 
   <h2>The installation identifier</h2>
   <p>Each install generates a short random code such as <code>Ryc#j0</code>, stored in
