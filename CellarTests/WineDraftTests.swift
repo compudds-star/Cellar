@@ -7,7 +7,7 @@ final class WineDraftTests: XCTestCase {
     func testLoadsAndSavesAWine() throws {
         let container = try ModelContainer(
             for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self,
-            CellarCollection.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+            CellarCollection.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         let ctx = ModelContext(container)
         let wine = Wine(name: "Grange", producer: "Penfolds", varietal: "Shiraz", region: "South Australia",
                         country: "Australia", vintage: 2016, type: .red, lwin7: "1004285", notes: "Gift",

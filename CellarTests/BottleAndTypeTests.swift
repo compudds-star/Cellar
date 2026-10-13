@@ -44,7 +44,7 @@ final class BottleDraftTests: XCTestCase {
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self, CellarCollection.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         return ModelContext(container)
     }
 

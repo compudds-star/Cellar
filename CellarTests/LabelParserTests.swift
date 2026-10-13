@@ -171,7 +171,7 @@ final class CellarStatsTests: XCTestCase {
     /// In-memory context so relationship mutation is backed by a real store —
     /// mutating `@Model` relationships on unattached instances is unsupported.
     private func makeContext() throws -> ModelContext {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(
             for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self, CellarCollection.self,
             configurations: config)

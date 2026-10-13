@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct RootTabView: View {
     @Environment(\.modelContext) private var context
@@ -28,9 +29,13 @@ struct RootTabView: View {
             await DrinkWindowNotifier.requestAuthorization()
             DataCleanup.titleCaseAllCapsNames(in: context)
             await importSharedWines()
+            AutomaticBackup.runIfDue(context.container)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await importSharedWines() } }
+            if phase == .active {
+                Task { await importSharedWines() }
+                AutomaticBackup.runIfDue(context.container)
+            }
         }
         // Setup in one tap: cellar://configure?endpoint=…&token=… fills in the
         // pricing server so nobody has to type a URL into Settings. Always asks
@@ -92,7 +97,9 @@ struct RootTabView: View {
 
 #Preview {
     RootTabView()
-        .modelContainer(for: [Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self,
-                              TastingNote.self, CellarCollection.self],
-                        inMemory: true)
+        // cloudKitDatabase: .none — with the iCloud entitlement, the default would try CloudKit.
+        .modelContainer(try! ModelContainer(
+            for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self,
+            TastingNote.self, CellarCollection.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)))
 }

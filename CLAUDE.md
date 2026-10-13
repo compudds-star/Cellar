@@ -48,8 +48,12 @@ xcodebuild -project Cellar.xcodeproj -scheme Cellar \
   Xcode registers it). The extension never opens the SwiftData store (and can't load
   LWIN within its memory limit); the app does the import.
 - On-device only: SwiftData store + `NSFileProtectionComplete`. No analytics, no
-  third-party SDKs. Nothing leaves the phone except an export the user initiates
-  or the wine identity sent to price it.
+  third-party SDKs. Nothing leaves the phone except an export the user initiates,
+  the wine identity sent to price it, and backups to the user's own iCloud Drive
+  (Settings → Backup; daily automatic, can be turned off).
+- The app has the iCloud Documents entitlement (container `iCloud.com.doony.cellar`),
+  so **every `ModelConfiguration` must pass `cloudKitDatabase: .none`** — the default
+  `.automatic` tries CloudKit sync and fails to load (tests included).
 - Toggle view visibility with `el.hidden`-style SwiftUI state, keep code matching
   the surrounding style.
 
@@ -88,6 +92,12 @@ Cellar/                      app source (Swift)
 │                            under the Cellar list's value); CellarStats (pure aggregation)
 ├── Purchase/               MerchantOffer, NearbyStores (MapKit + one-shot location)
 ├── Export/                 CSV + PDF exporters
+├── Backup/                 CellarArchive (whole cellar incl. photos as a binary plist;
+│                            capture/restore keep ids) + BackupStore (iCloud Drive
+│                            "Vino Cellar" folder via NSUbiquitousContainers, local
+│                            Documents/Backups fallback; date+kind in the file name;
+│                            keeps 14 automatic) + AutomaticBackup (daily on foreground,
+│                            never backs up an empty cellar); UI is Views/BackupView
 ├── Notifications/          DrinkWindowNotifier (local notifications)
 ├── Resources/lwin_sample.csv   20-wine sample (illustrative codes; replace with real)
 └── Views/                  RootTabView (Cellar/Wishlist/Drank/Value tabs; applies

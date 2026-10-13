@@ -479,6 +479,64 @@ final class CellarSmokeUITests: XCTestCase {
         app.navigationBars["Settings"].buttons["Cancel"].tap()
     }
 
+    /// Settings → Backup: back up, change the cellar, restore — the change is undone.
+    /// Restores a backup made seconds earlier, so other tests' wines come back too.
+    func testBackUpAndRestore() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let kept = "Kept \(stamp)", later = "Later \(stamp)"
+
+        func addWine(_ producer: String) {
+            app.tabBars.buttons["Cellar"].tap()
+            app.navigationBars["Cellar"].buttons["Add"].tap()
+            type(producer, into: app.textFields["Producer"])
+            app.navigationBars["Add wine"].buttons["Save"].tap()
+            XCTAssertTrue(app.navigationBars["Add wine"].waitForNonExistence(timeout: 5), "\(producer) not saved")
+        }
+        func openBackup() {
+            app.tabBars.buttons["Cellar"].tap()
+            app.navigationBars["Cellar"].buttons["Settings"].tap()
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+            let row = app.buttons["Backup"]
+            for _ in 0..<4 where !row.exists { app.swipeUp() }
+            XCTAssertTrue(row.waitForExistence(timeout: 5), "no Backup row in Settings")
+            row.tap()
+            XCTAssertTrue(app.navigationBars["Backup"].waitForExistence(timeout: 5))
+        }
+        func closeBackup() {
+            app.navigationBars["Backup"].buttons["Settings"].tap()
+            app.navigationBars["Settings"].buttons["Cancel"].tap()
+        }
+
+        addWine(kept)
+        openBackup()
+        app.buttons["Back Up Now"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Backed up")).firstMatch
+                        .waitForExistence(timeout: 30), "backup didn't finish")
+        snapshot("backup-done")
+        closeBackup()
+
+        addWine(later)
+        openBackup()
+        let newestManual = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Manual")).firstMatch
+        XCTAssertTrue(newestManual.waitForExistence(timeout: 10), "manual backup not listed")
+        newestManual.tap()
+        app.buttons["Replace My Cellar"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Restored")).firstMatch
+                        .waitForExistence(timeout: 30), "restore didn't finish")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Before restore")).firstMatch.exists,
+                      "no safety backup of the replaced cellar")
+        snapshot("backup-restored")
+        closeBackup()
+
+        _ = searchCellar(for: kept)
+        clearCellarSearch()
+        let field = app.searchFields["Search wines"]
+        field.tap()
+        field.typeText(later)
+        XCTAssertTrue(cell(containing: later).waitForNonExistence(timeout: 5), "restore didn't undo the later wine")
+        clearCellarSearch()
+    }
+
     /// Settings defaults for new bottles: wine and spirit sizes drive the Add form.
     func testSettingsBottleSizeDefaults() {
         func setSizes(wine: String, spirits: String) {

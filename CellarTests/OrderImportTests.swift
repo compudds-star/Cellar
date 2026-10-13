@@ -9,7 +9,7 @@ final class OrderImportTests: XCTestCase {
     override func setUpWithError() throws {
         container = try ModelContainer(
             for: Wine.self, Bottle.self, ValuationSnapshot.self, PurchaseOption.self, TastingNote.self,
-            CellarCollection.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+            CellarCollection.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         ctx = ModelContext(container)
     }
 

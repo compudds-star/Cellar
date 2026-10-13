@@ -88,6 +88,16 @@ struct SettingsView: View {
                     Text("Passes this pricing server on as a QR code or a link, so they don't have to type any of it.")
                 }
 
+                Section {
+                    NavigationLink {
+                        BackupView()
+                    } label: {
+                        Label("Backup", systemImage: "icloud.and.arrow.up")
+                    }
+                } footer: {
+                    Text("Back up your cellar to iCloud Drive, and restore it if anything goes wrong.")
+                }
+
                 if showsOwnerControls { ownerSection }
 
                 Section {
