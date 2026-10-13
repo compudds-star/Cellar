@@ -233,9 +233,12 @@ enum BackupError: LocalizedError {
     case newerVersion
     case downloadTimedOut
     case emptyCellar
+    case notABackup
 
     var errorDescription: String? {
         switch self {
+        case .notABackup:
+            return "That file isn't a Vino Cellar backup, or it's damaged."
         case .newerVersion:
             return "This backup was made by a newer version of Vino Cellar. Update the app, then try again."
         case .downloadTimedOut:

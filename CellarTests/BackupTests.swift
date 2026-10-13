@@ -77,6 +77,27 @@ final class BackupTests: XCTestCase {
         XCTAssertNil(BackupStore.parse(fileName: "notes.txt"))
     }
 
+    /// "Restore from a File…": a backup copied anywhere reads back; anything else is refused clearly.
+    func testPickedFileReadsBackOrIsRefused() throws {
+        let source = try makeContext()
+        source.insert(Wine(name: "Grand Vin", producer: "Château Margaux", vintage: 2015))
+        try source.save()
+        let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let backup = dir.appending(path: "copied.vinocellarbackup")
+        try CellarArchive.capture(from: source).encoded().write(to: backup)
+        let archive = try BackupStore.read(pickedFile: backup)
+        XCTAssertEqual(archive.wines.map(\.producer), ["Château Margaux"])
+
+        let junk = dir.appending(path: "junk.vinocellarbackup")
+        try Data("not a backup".utf8).write(to: junk)
+        XCTAssertThrowsError(try BackupStore.read(pickedFile: junk)) { error in
+            guard case BackupError.notABackup = error else { return XCTFail("unexpected error \(error)") }
+        }
+    }
+
     func testNewerVersionIsRefused() throws {
         var archive = CellarArchive(createdAt: .now, collections: [], wines: [])
         archive.version = CellarArchive.currentVersion + 1

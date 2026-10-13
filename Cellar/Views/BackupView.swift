@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// Settings → Backup: automatic daily backups to iCloud Drive, "Back Up Now",
-/// and restoring from any backup in the list. Changes here apply immediately —
+/// and restoring from any backup in the list or a backup file picked in Files
+/// (one copied elsewhere, or sent from another phone). Changes here apply immediately —
 /// they don't wait for Settings' Save.
 struct BackupView: View {
     @Environment(\.modelContext) private var context
@@ -14,6 +16,9 @@ struct BackupView: View {
     @State private var busy: String?
     @State private var message: String?
     @State private var restoreCandidate: BackupFile?
+    @State private var pickingFile = false
+    /// A picked file, already read, waiting for the user to confirm.
+    @State private var pickedArchive: CellarArchive?
 
     var body: some View {
         Form {
@@ -32,6 +37,12 @@ struct BackupView: View {
                     }
                 }
                 .disabled(busy != nil || wines.isEmpty)
+                Button {
+                    pickingFile = true
+                } label: {
+                    Label("Restore from a File…", systemImage: "doc.badge.arrow.up")
+                }
+                .disabled(busy != nil)
             } footer: {
                 Text("Once a day when you open the app, keeping the last \(BackupStore.automaticToKeep). Backups include everything — wines, bottles, notes, collections, prices and label photos.")
             }
@@ -83,6 +94,23 @@ struct BackupView: View {
             }
         } message: { file in
             Text("Your cellar will be replaced with the backup from \(file.date.formatted(date: .abbreviated, time: .shortened)). Your current cellar is backed up first, so you can go back.")
+        }
+        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.vinoCellarBackup]) { result in
+            switch result {
+            case .success(let url): Task { await open(url) }
+            case .failure(let error): message = "Couldn't open that file: \(error.localizedDescription)"
+            }
+        }
+        .confirmationDialog("Restore this backup?",
+                            isPresented: Binding(get: { pickedArchive != nil },
+                                                 set: { if !$0 { pickedArchive = nil } }),
+                            titleVisibility: .visible,
+                            presenting: pickedArchive) { archive in
+            Button("Replace My Cellar", role: .destructive) {
+                Task { await apply(archive) }
+            }
+        } message: { archive in
+            Text("This file is a backup from \(archive.createdAt.formatted(date: .abbreviated, time: .shortened)) with \(winesText(archive)). Your cellar will be replaced with it; your current cellar is backed up first, so you can go back.")
         }
     }
 
@@ -136,11 +164,33 @@ struct BackupView: View {
     private func restore(_ file: BackupFile) async {
         busy = "restore"
         defer { busy = nil }
+        do {
+            // Read first, so a backup that can't be opened never costs the current cellar.
+            let archive = try await Task.detached { try BackupStore.read(file) }.value
+            await apply(archive)
+        } catch {
+            message = "Restore failed: \(error.localizedDescription) Your cellar wasn't changed."
+        }
+    }
+
+    /// Reads a file picked in Files, then asks before restoring it.
+    private func open(_ url: URL) async {
+        busy = "open"
+        defer { busy = nil }
+        do {
+            pickedArchive = try await Task.detached { try BackupStore.read(pickedFile: url) }.value
+        } catch {
+            message = "Couldn't restore that file: \(error.localizedDescription) Your cellar wasn't changed."
+        }
+    }
+
+    /// Saves the current cellar as a "Before restore" backup, then replaces it.
+    private func apply(_ archive: CellarArchive) async {
+        busy = "restore"
+        defer { busy = nil }
         let container = context.container
         do {
             try context.save()
-            // Read first, so a backup that can't be opened never costs the current cellar.
-            let archive = try await Task.detached { try BackupStore.read(file) }.value
             if !wines.isEmpty {
                 _ = try await Task.detached {
                     try BackupStore.backUp(container, kind: .beforeRestore)
@@ -148,11 +198,16 @@ struct BackupView: View {
             }
             try archive.restore(into: context)
             await DrinkWindowNotifier.rescheduleAll(for: (try? context.fetch(FetchDescriptor<Wine>())) ?? [])
-            message = "Restored \(archive.wines.count) wine\(archive.wines.count == 1 ? "" : "s") and \(archive.bottleCount) bottle\(archive.bottleCount == 1 ? "" : "s") from \(file.date.formatted(date: .abbreviated, time: .shortened))."
+            message = "Restored \(winesText(archive)) from \(archive.createdAt.formatted(date: .abbreviated, time: .shortened))."
         } catch {
             message = "Restore failed: \(error.localizedDescription) Your cellar wasn't changed."
         }
         await reload()
+    }
+
+    private func winesText(_ archive: CellarArchive) -> String {
+        let w = archive.wines.count, b = archive.bottleCount
+        return "\(w) wine\(w == 1 ? "" : "s") and \(b) bottle\(b == 1 ? "" : "s")"
     }
 
     private func delete(at offsets: IndexSet) {
@@ -162,4 +217,9 @@ struct BackupView: View {
             for file in doomed { try? BackupStore.delete(file) }
         }
     }
+}
+
+extension UTType {
+    /// Declared in Info.plist (UTExportedTypeDeclarations) so Files knows the extension.
+    static let vinoCellarBackup = UTType(exportedAs: "com.doony.cellar.backup")
 }

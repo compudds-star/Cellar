@@ -146,13 +146,24 @@ enum BackupStore {
 
     // MARK: Read
 
-    /// Downloads the file from iCloud if needed (up to a minute), then decodes it.
     static func read(_ file: BackupFile) throws -> CellarArchive {
+        try read(at: file.url)
+    }
+
+    /// A backup picked in the Files app — anywhere, not just the backup folder.
+    static func read(pickedFile url: URL) throws -> CellarArchive {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        return try read(at: url)
+    }
+
+    /// Downloads the file from iCloud if needed (up to a minute), then decodes it.
+    private static func read(at fileURL: URL) throws -> CellarArchive {
         let fm = FileManager.default
-        if fm.isUbiquitousItem(at: file.url) {
-            try? fm.startDownloadingUbiquitousItem(at: file.url)
+        if fm.isUbiquitousItem(at: fileURL) {
+            try? fm.startDownloadingUbiquitousItem(at: fileURL)
             let deadline = Date.now.addingTimeInterval(60)
-            while !isDownloaded(file.url) {
+            while !isDownloaded(fileURL) {
                 guard Date.now < deadline else { throw BackupError.downloadTimedOut }
                 Thread.sleep(forTimeInterval: 0.5)
             }
@@ -160,11 +171,17 @@ enum BackupStore {
         var data = Data()
         var coordError: NSError?
         var readError: Error?
-        NSFileCoordinator().coordinate(readingItemAt: file.url, options: [], error: &coordError) { url in
+        NSFileCoordinator().coordinate(readingItemAt: fileURL, options: [], error: &coordError) { url in
             do { data = try Data(contentsOf: url) } catch { readError = error }
         }
         if let error = coordError ?? readError { throw error }
-        return try CellarArchive.decode(data)
+        do {
+            return try CellarArchive.decode(data)
+        } catch let error as BackupError {
+            throw error
+        } catch {
+            throw BackupError.notABackup
+        }
     }
 
     private static func isDownloaded(_ url: URL) -> Bool {
