@@ -310,6 +310,36 @@ final class CellarSmokeUITests: XCTestCase {
     }
 
     /// Move a cellar wine to the Wishlist from Edit, then back: bottles and price paid survive.
+    /// Select mode → trash: deletes every selected wine after confirming.
+    func testDeleteSelectedWines() {
+        let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
+        let wineA = "GoneA \(stamp)", wineB = "GoneB \(stamp)"
+        for producer in [wineA, wineB] {
+            app.tabBars.buttons["Cellar"].tap()
+            app.navigationBars["Cellar"].buttons["Add"].tap()
+            type(producer, into: app.textFields["Producer"])
+            app.navigationBars["Add wine"].buttons["Save"].tap()
+            XCTAssertTrue(app.navigationBars["Add wine"].waitForNonExistence(timeout: 5), "\(producer) not saved")
+        }
+
+        app.navigationBars["Cellar"].buttons["Select"].tap()
+        searchCellar(for: stamp)
+        cell(containing: wineA).tap()
+        cell(containing: wineB).tap()
+        let trash = app.toolbars.buttons["Delete"].exists ? app.toolbars.buttons["Delete"] : app.buttons["Delete"].firstMatch
+        XCTAssertTrue(trash.waitForExistence(timeout: 5), "no Delete in Select mode")
+        snapshot("20-select-to-delete")
+        trash.tap()
+
+        XCTAssertTrue(app.staticTexts["Delete 2 wines?"].waitForExistence(timeout: 5), "no delete confirmation")
+        // The dialog's own Delete, not the toolbar's trash button of the same name.
+        app.sheets["Delete 2 wines?"].buttons["Delete"].tap()
+
+        XCTAssertTrue(cell(containing: wineA).waitForNonExistence(timeout: 5), "\(wineA) not deleted")
+        XCTAssertFalse(cell(containing: wineB).exists, "\(wineB) not deleted")
+        clearCellarSearch()
+    }
+
     func testMoveWineToWishlistAndBack() {
         let stamp = String(Int(Date().timeIntervalSince1970) % 100000)
         let producer = "Roundtrip \(stamp)"

@@ -275,4 +275,64 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(DataCleanup.titleCaseAllCapsNames(in: ctx, defaults: defaults), 0)
         XCTAssertEqual(caps.producer, "LVMH")
     }
+
+    // MARK: Deleting from Select mode
+
+    /// Wine A: 2 at Home + 1 at the beach. Wine B: 3 at Home only.
+    private func twoWinesInTwoPlaces() throws -> (home: CellarCollection, beach: CellarCollection, a: Wine, b: Wine) {
+        let home = CellarCollection(name: "Home"), beach = CellarCollection(name: "Beach house")
+        ctx.insert(home)
+        ctx.insert(beach)
+        let a = Wine(name: "A"), b = Wine(name: "B")
+        ctx.insert(a)
+        ctx.insert(b)
+        addBottles(a, count: 2, to: home)
+        addBottles(a, count: 1, to: beach)
+        addBottles(b, count: 3, to: home)
+        try ctx.save()
+        return (home, beach, a, b)
+    }
+
+    func testDeleteInOneCollectionKeepsBottlesElsewhere() throws {
+        let (home, _, a, b) = try twoWinesInTwoPlaces()
+        let scope = CollectionScope.collection(home)
+        XCTAssertEqual(CellarDeleter.preview([a, b], in: scope),
+                       .init(winesDeleted: 1, bottlesDeleted: 5))
+
+        let result = CellarDeleter.delete([a, b], in: scope, context: ctx)
+        try ctx.save()
+
+        XCTAssertEqual(result, .init(winesDeleted: 1, bottlesDeleted: 5))
+        let wines = try ctx.fetch(FetchDescriptor<Wine>())
+        XCTAssertEqual(wines.map(\.name), ["A"], "B had nothing outside Home, so it goes entirely")
+        XCTAssertEqual(wines.first?.inStockCount, 1)
+        XCTAssertEqual(wines.first?.inStockBottles.first?.collection?.name, "Beach house")
+        XCTAssertEqual(try ctx.fetch(FetchDescriptor<Bottle>()).count, 1)
+    }
+
+    func testDeleteAcrossAllCollectionsRemovesWholeWines() throws {
+        let (_, _, a, b) = try twoWinesInTwoPlaces()
+        XCTAssertEqual(CellarDeleter.preview([a, b], in: .all), .init(winesDeleted: 2, bottlesDeleted: 6))
+        CellarDeleter.delete([a], in: .all, context: ctx)
+        try ctx.save()
+        XCTAssertEqual(try ctx.fetch(FetchDescriptor<Wine>()).map(\.name), ["B"])
+        XCTAssertEqual(try ctx.fetch(FetchDescriptor<Bottle>()).count, 3)
+    }
+
+    /// A wine whose last in-stock bottles go is deleted, not left behind under Drank.
+    func testDeletingLastBottlesDoesNotLeaveADrankWine() throws {
+        let home = CellarCollection(name: "Home")
+        ctx.insert(home)
+        let wine = Wine(name: "C")
+        ctx.insert(wine)
+        addBottles(wine, count: 1, to: home)
+        let drunk = Bottle(status: .consumed)
+        ctx.insert(drunk)
+        wine.bottles.append(drunk)
+        try ctx.save()
+
+        CellarDeleter.delete([wine], in: .collection(home), context: ctx)
+        try ctx.save()
+        XCTAssertTrue(try ctx.fetch(FetchDescriptor<Wine>()).isEmpty)
+    }
 }

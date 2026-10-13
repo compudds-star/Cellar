@@ -14,6 +14,7 @@ struct CellarListView: View {
     @State private var scope: CollectionScope = .all
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<UUID>()
+    @State private var confirmingDelete = false
     @State private var lastRefresh: PriceLookup.BulkResult?
     @State private var refreshError: String?
     @Query(sort: \CellarCollection.name) private var collections: [CellarCollection]
@@ -232,6 +233,12 @@ struct CellarListView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                             .fixedSize()
                         Spacer()
+                        Button(role: .destructive) {
+                            confirmingDelete = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .disabled(selection.isEmpty)
                         MoveToCollectionMenu(bottleCount: selectedBottleCount) { destination in
                             CollectionMover.move(bottlesOf: selectedWines, in: scope, to: destination)
                             withAnimation {
@@ -241,6 +248,18 @@ struct CellarListView: View {
                         }
                     }
                 }
+            }
+            .confirmationDialog(deleteTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    let doomed = selectedWines
+                    withAnimation {
+                        CellarDeleter.delete(doomed, in: scope, context: context)
+                        selection.removeAll()
+                        editMode = .inactive
+                    }
+                }
+            } message: {
+                Text(deleteMessage + " This can't be undone, but your backups in Settings → Backup still have them.")
             }
             .sheet(isPresented: $showingAdd) {
                 AddWineFlow()
@@ -374,8 +393,32 @@ struct CellarListView: View {
         }
     }
 
+    private var deleteTitle: String {
+        if case .all = scope {
+            return "Delete \(selection.count) wine\(selection.count == 1 ? "" : "s")?"
+        }
+        let n = selectedBottleCount
+        return "Delete \(n) bottle\(n == 1 ? "" : "s") from \(scope.title)?"
+    }
+
+    private var deleteMessage: String {
+        if case .all = scope {
+            return "Every bottle goes, in all collections, with tasting notes and history."
+        }
+        let preview = CellarDeleter.preview(selectedWines, in: scope)
+        let kept = selectedWines.count - preview.winesDeleted
+        var parts: [String] = []
+        if kept > 0 {
+            parts.append("\(kept == 1 ? "A wine" : "\(kept) wines") with bottles in other collections \(kept == 1 ? "keeps" : "keep") them.")
+        }
+        if preview.winesDeleted > 0 {
+            parts.append("\(preview.winesDeleted == 1 ? "A wine" : "\(preview.winesDeleted) wines") with nothing left elsewhere \(preview.winesDeleted == 1 ? "is" : "are") deleted entirely.")
+        }
+        return parts.joined(separator: " ")
+    }
+
     private func delete(_ wines: [Wine], at offsets: IndexSet) {
-        for index in offsets { context.delete(wines[index]) }
+        CellarDeleter.delete(offsets.map { wines[$0] }, in: scope, context: context)
     }
 }
 

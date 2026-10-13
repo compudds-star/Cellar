@@ -139,3 +139,54 @@ enum CollectionMover {
         return moved
     }
 }
+
+/// Deletes what the Cellar list shows, the same way `CollectionMover` moves it:
+/// across all collections a wine goes entirely; inside one collection only its
+/// in-stock bottles there go, and a wine left with nothing in stock anywhere is
+/// deleted too (rather than turning up under Drank as if it had been drunk).
+enum CellarDeleter {
+    struct Result: Equatable {
+        var winesDeleted = 0
+        var bottlesDeleted = 0
+    }
+
+    /// What `delete` would remove, for the confirmation message.
+    static func preview(_ wines: [Wine], in scope: CollectionScope) -> Result {
+        var result = Result()
+        for wine in wines {
+            if deletesWholeWine(wine, in: scope) {
+                result.winesDeleted += 1
+                result.bottlesDeleted += wine.inStockCount
+            } else {
+                result.bottlesDeleted += wine.inStockBottles(in: scope).count
+            }
+        }
+        return result
+    }
+
+    @discardableResult
+    static func delete(_ wines: [Wine], in scope: CollectionScope, context: ModelContext) -> Result {
+        var result = Result()
+        for wine in wines {
+            if deletesWholeWine(wine, in: scope) {
+                result.winesDeleted += 1
+                result.bottlesDeleted += wine.inStockCount
+                for bottle in wine.bottles { DrinkWindowNotifier.cancel(bottleID: bottle.id) }
+                context.delete(wine)
+            } else {
+                for bottle in wine.inStockBottles(in: scope) {
+                    DrinkWindowNotifier.cancel(bottleID: bottle.id)
+                    wine.bottles.removeAll { $0.id == bottle.id }
+                    context.delete(bottle)
+                    result.bottlesDeleted += 1
+                }
+            }
+        }
+        return result
+    }
+
+    private static func deletesWholeWine(_ wine: Wine, in scope: CollectionScope) -> Bool {
+        if case .all = scope { return true }
+        return wine.inStockBottles.allSatisfy(scope.includes)
+    }
+}
