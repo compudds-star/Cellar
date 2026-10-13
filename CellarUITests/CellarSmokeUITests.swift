@@ -803,11 +803,13 @@ final class CellarSmokeUITests: XCTestCase {
     }
 
     /// Ends a Cellar search so the full list and toolbar come back.
+    /// iOS 26 labels the search bar's dismiss button "Close"; earlier releases say "Cancel".
     private func clearCellarSearch() {
-        let cancel = app.navigationBars.buttons["Cancel"]
-        if cancel.exists {
-            cancel.tap()
-        } else if app.buttons["Cancel"].firstMatch.exists {
+        for label in ["Close", "Cancel"] {
+            let button = app.navigationBars.buttons[label]
+            if button.exists { button.tap(); return }
+        }
+        if app.buttons["Cancel"].firstMatch.exists {
             app.buttons["Cancel"].firstMatch.tap()
         }
     }

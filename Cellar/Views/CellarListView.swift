@@ -152,6 +152,9 @@ struct CellarListView: View {
                 }
             }
             .environment(\.editMode, $editMode)
+            // While selecting, the tab bar makes way for the Move to… bar; on iOS 26
+            // the bottom bar otherwise sits behind the floating tab bar, out of reach.
+            .toolbar(editMode.isEditing ? .hidden : .visible, for: .tabBar)
             .navigationTitle(scope == .all ? "Cellar" : scope.title)
             .onChange(of: collections) { _, current in
                 // A deleted collection can't stay selected.
@@ -227,6 +230,7 @@ struct CellarListView: View {
                     ToolbarItemGroup(placement: .bottomBar) {
                         Text("\(selection.count) wine\(selection.count == 1 ? "" : "s") · \(selectedBottleCount) bottle\(selectedBottleCount == 1 ? "" : "s")")
                             .font(.footnote).foregroundStyle(.secondary)
+                            .fixedSize()
                         Spacer()
                         MoveToCollectionMenu(bottleCount: selectedBottleCount) { destination in
                             CollectionMover.move(bottlesOf: selectedWines, in: scope, to: destination)
