@@ -160,55 +160,68 @@ struct CellarListView: View {
             .searchable(text: $searchText, prompt: "Search wines")
             .navigationDestination(for: Wine.self) { WineDetailView(wine: $0) }
             .toolbar {
+                // Icons only, capped at Large text, so the trailing ⚙︎ and + fit without
+                // iOS folding them into a "…" overflow menu.
                 ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button("All types") { typeFilter = nil }
-                        Section("Wine") {
-                            ForEach(WineType.wines) { t in
-                                Button(t.label) { typeFilter = t }
-                            }
-                        }
-                        Section("Spirits") {
-                            ForEach(WineType.spirits) { t in
-                                Button(t.label) { typeFilter = t }
-                            }
-                        }
-                    } label: {
-                        Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    if !collections.isEmpty {
+                    HStack(spacing: 4) {
                         Menu {
-                            Picker("Collection", selection: $scope) {
-                                Text("All collections").tag(CollectionScope.all)
-                                ForEach(collections) { Text($0.name).tag(CollectionScope.collection($0)) }
-                                Text("No collection").tag(CollectionScope.unassigned)
+                            Button("All types") { typeFilter = nil }
+                            Section("Wine") {
+                                ForEach(WineType.wines) { t in
+                                    Button(t.label) { typeFilter = t }
+                                }
+                            }
+                            Section("Spirits") {
+                                ForEach(WineType.spirits) { t in
+                                    Button(t.label) { typeFilter = t }
+                                }
                             }
                         } label: {
-                            Label("Collection", systemImage: scope == .all ? "archivebox" : "archivebox.fill")
+                            Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        if !collections.isEmpty {
+                            Menu {
+                                Picker("Collection", selection: $scope) {
+                                    Text("All collections").tag(CollectionScope.all)
+                                    ForEach(collections) { Text($0.name).tag(CollectionScope.collection($0)) }
+                                    Text("No collection").tag(CollectionScope.unassigned)
+                                }
+                            } label: {
+                                Label("Collection", systemImage: scope == .all ? "archivebox" : "archivebox.fill")
+                            }
+                        }
+                        Button { showingOrderImport = true } label: {
+                            Label("Import order", systemImage: "envelope.badge")
                         }
                     }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showingOrderImport = true } label: {
-                        Label("Import order", systemImage: "envelope.badge")
-                    }
+                    .labelStyle(.iconOnly)
+                    .dynamicTypeSize(...DynamicTypeSize.large)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if wines.contains(where: { !$0.isWishlist && !$0.isDrank }) {
-                        Button(editMode.isEditing ? "Done" : "Select") {
+                        Button {
                             withAnimation {
                                 editMode = editMode.isEditing ? .inactive : .active
                                 selection.removeAll()
                             }
+                        } label: {
+                            Label(editMode.isEditing ? "Done" : "Select",
+                                  systemImage: editMode.isEditing ? "checkmark.circle.fill" : "checkmark.circle")
                         }
+                        .dynamicTypeSize(...DynamicTypeSize.large)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .dynamicTypeSize(...DynamicTypeSize.large)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingAdd = true } label: {
+                        Label("Add", systemImage: "plus")
+                    }
+                    .dynamicTypeSize(...DynamicTypeSize.large)
                 }
                 if editMode.isEditing {
                     ToolbarItemGroup(placement: .bottomBar) {
@@ -222,11 +235,6 @@ struct CellarListView: View {
                                 editMode = .inactive
                             }
                         }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAdd = true } label: {
-                        Label("Add", systemImage: "plus")
                     }
                 }
             }
