@@ -73,6 +73,14 @@ iPhone, iOS 18 or later.
 Wine identity data is the Liv-ex LWIN database, used under CC BY 4.0.
 ```
 
+## What's New (for version 1.3)
+
+```
+Back up your cellar to iCloud Drive. Vino Cellar now saves a backup every day — wines, bottles, notes, collections, prices and label photos — and you can restore any of them from Settings → Backup. Restoring keeps a copy of your current cellar first, so nothing is lost.
+
+Settings and + are back on the Cellar tab's top bar, no extra tap needed.
+```
+
 ## What's New (for version 1.2)
 
 ```
