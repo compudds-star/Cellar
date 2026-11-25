@@ -1,8 +1,61 @@
 import Foundation
 import UIKit
 
-/// Renders a one-or-more page PDF summary of the cellar: totals up top, then a
-/// line per wine (vintage/name, in-stock count, rating, estimated value).
+/// One location's block in the PDF report: its wines (highest value first) and totals.
+struct CellarReportSection {
+    struct Line {
+        let wine: Wine
+        let count: Int
+        let total: Decimal
+        /// Estimated value per bottle here (average across sizes).
+        let perBottle: Decimal
+        /// Average price paid per bottle here, over the bottles with a price recorded.
+        let paidPerBottle: Decimal?
+    }
+
+    let scope: CollectionScope
+    let lines: [Line]
+    var bottleCount: Int { lines.reduce(0) { $0 + $1.count } }
+    var total: Decimal { lines.reduce(Decimal(0)) { $0 + $1.total } }
+
+    /// Sections per collection (plus unassigned bottles), highest total first.
+    /// With no collections at all there is a single `.all` section.
+    static func sections(for wines: [Wine]) -> [CellarReportSection] {
+        let inStock = wines.flatMap(\.inStockBottles)
+        let collections = Dictionary(grouping: inStock.compactMap(\.collection), by: \.id)
+            .compactMap { $0.value.first }
+        var scopes: [CollectionScope] = collections.map { .collection($0) }
+        if scopes.isEmpty {
+            scopes = [.all]
+        } else if inStock.contains(where: { $0.collection == nil }) {
+            scopes.append(.unassigned)
+        }
+        return scopes
+            .map { section(for: wines, scope: $0) }
+            .filter { !$0.lines.isEmpty }
+            .sorted { $0.total != $1.total ? $0.total > $1.total : $0.scope.title < $1.scope.title }
+    }
+
+    static func section(for wines: [Wine], scope: CollectionScope) -> CellarReportSection {
+        let lines = wines.compactMap { wine -> Line? in
+            let bottles = wine.inStockBottles(in: scope)
+            guard !bottles.isEmpty else { return nil }
+            let total = wine.totalEstimatedValue(in: scope)
+            let paid = bottles.compactMap(\.purchasePrice)
+            return Line(wine: wine,
+                        count: bottles.count,
+                        total: total,
+                        perBottle: total / Decimal(bottles.count),
+                        paidPerBottle: paid.isEmpty ? nil : paid.reduce(Decimal(0), +) / Decimal(paid.count))
+        }
+        .sorted { $0.total != $1.total ? $0.total > $1.total : Wine.alphabeticalOrder($0.wine, $1.wine) }
+        return CellarReportSection(scope: scope, lines: lines)
+    }
+}
+
+/// Renders a one-or-more page PDF report of the cellar: totals up top, then each
+/// location (collection), most valuable first, with a line per wine (vintage/name,
+/// count, rating, price per bottle, price paid per bottle, estimated value).
 enum CellarPDFExporter {
 
     static func write(_ wines: [Wine]) throws -> URL {
@@ -19,21 +72,45 @@ enum CellarPDFExporter {
         let subAttr: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: 12),
             .foregroundColor: UIColor.darkGray]
+        let sectionAttr: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: 14)]
+        let headerAttr: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: 10),
+            .foregroundColor: UIColor.gray]
+        let nameStyle = NSMutableParagraphStyle()
+        nameStyle.lineBreakMode = .byTruncatingTail
         let rowAttr: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 12)]
-        let rightRow: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 12),
+            .font: UIFont.systemFont(ofSize: 11),
+            .paragraphStyle: nameStyle]
+        let numAttr: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
             .foregroundColor: UIColor.darkGray]
+        let totalAttr: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)]
 
-        let sorted = wines
-            .filter { !$0.inStockBottles.isEmpty }
-            .sorted { $0.totalEstimatedValue > $1.totalEstimatedValue }
+        // Right edges of the number columns; the name column fills the rest.
+        let right = pageRect.width - margin
+        let totalRight = right
+        let paidRight = right - 84
+        let perBottleRight = paidRight - 76
+        let qtyRight = perBottleRight - 76
+        let nameWidth = qtyRight - 30 - margin
+
+        func drawRight(_ text: String, _ edge: CGFloat, _ y: CGFloat, _ attr: [NSAttributedString.Key: Any]) {
+            let w = (text as NSString).size(withAttributes: attr).width
+            text.draw(at: CGPoint(x: edge - w, y: y), withAttributes: attr)
+        }
+
+        let sections = CellarReportSection.sections(for: wines)
+        let showSectionHeaders = !(sections.count == 1 && sections.first.map {
+            if case .all = $0.scope { return true } else { return false }
+        } == true)
 
         try renderer.writePDF(to: url) { ctx in
             var y: CGFloat = margin
             ctx.beginPage()
 
-            "Cellar".draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttr)
+            "Cellar Report".draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttr)
             y += 30
             let df = DateFormatter(); df.dateStyle = .long
             """
@@ -49,37 +126,58 @@ enum CellarPDFExporter {
             }
             y += 8
 
-            // A total per collection, when bottles are grouped into collections.
-            let collections = Dictionary(grouping: wines.flatMap(\.inStockBottles).compactMap(\.collection), by: \.id)
-                .compactMap { $0.value.first }
-                .sorted { $0.name < $1.name }
-            if !collections.isEmpty {
-                var scopes = collections.map { CollectionScope.collection($0) }
-                if CellarStats(wines: wines, scope: .unassigned).bottleCount > 0 { scopes.append(.unassigned) }
-                for scope in scopes {
-                    let s = CellarStats(wines: wines, scope: scope)
-                    "\(scope.title): \(s.bottleCount) bottle(s) · \(Money.string(s.totalValue))"
+            // A total per location, most valuable first.
+            if showSectionHeaders {
+                for section in sections {
+                    "\(section.scope.title): \(section.bottleCount) bottle(s) · \(Money.string(section.total))"
                         .draw(at: CGPoint(x: margin, y: y), withAttributes: subAttr)
                     y += 16
                 }
                 y += 8
             }
 
-            for wine in sorted {
-                if y > pageRect.height - margin {
+            func columnHeaders() {
+                "WINE".draw(at: CGPoint(x: margin, y: y), withAttributes: headerAttr)
+                drawRight("QTY", qtyRight, y, headerAttr)
+                drawRight("PER BOTTLE", perBottleRight, y, headerAttr)
+                drawRight("PAID / BTL", paidRight, y, headerAttr)
+                drawRight("VALUE", totalRight, y, headerAttr)
+                y += 16
+            }
+
+            for section in sections {
+                // Keep a section's title, column headers and first row together.
+                if y > pageRect.height - margin - 60 {
                     ctx.beginPage()
                     y = margin
                 }
-                let left = "\(wine.displayTitle)  ×\(wine.inStockCount)"
-                left.draw(at: CGPoint(x: margin, y: y), withAttributes: rowAttr)
+                y += 6
+                if showSectionHeaders {
+                    section.scope.title.draw(at: CGPoint(x: margin, y: y), withAttributes: sectionAttr)
+                    drawRight(Money.string(section.total), totalRight, y + 2, totalAttr)
+                    y += 22
+                }
+                columnHeaders()
 
-                var right = Money.string(wine.totalEstimatedValue)
-                if let r = wine.rating, r > 0 { right = "\(r)★ · " + right }
-                else if let s = wine.communityScore { right = "\(s)pt · " + right }
-                let rightSize = (right as NSString).size(withAttributes: rightRow)
-                right.draw(at: CGPoint(x: pageRect.width - margin - rightSize.width, y: y),
-                           withAttributes: rightRow)
-                y += 20
+                for line in section.lines {
+                    if y > pageRect.height - margin {
+                        ctx.beginPage()
+                        y = margin
+                        columnHeaders()
+                    }
+                    var name = line.wine.displayTitle
+                    if let r = line.wine.rating, r > 0 { name += "  \(r)★" }
+                    else if let s = line.wine.communityScore { name += "  \(s)pt" }
+                    name.draw(with: CGRect(x: margin, y: y, width: nameWidth, height: 16),
+                              options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+                              attributes: rowAttr, context: nil)
+                    drawRight("×\(line.count)", qtyRight, y, numAttr)
+                    drawRight(line.perBottle > 0 ? Money.string(line.perBottle) : "—", perBottleRight, y, numAttr)
+                    drawRight(line.paidPerBottle.map { Money.string($0) } ?? "—", paidRight, y, numAttr)
+                    drawRight(Money.string(line.total), totalRight, y, totalAttr)
+                    y += 18
+                }
+                y += 10
             }
         }
         return url

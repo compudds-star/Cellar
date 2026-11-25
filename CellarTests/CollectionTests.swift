@@ -52,6 +52,42 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(red.totalEstimatedValue(in: .collection(beach)), 100)
     }
 
+    func testReportSectionsSortByLocationValueWithPerBottlePrices() throws {
+        let home = CellarCollection(name: "Home"), beach = CellarCollection(name: "Beach house")
+        ctx.insert(home)
+        ctx.insert(beach)
+        let red = Wine(name: "Red", manualEstimatedValue: 100)
+        let white = Wine(name: "White", manualEstimatedValue: 40)
+        ctx.insert(red)
+        ctx.insert(white)
+        addBottles(red, count: 1, to: home)          // Home: 100
+        addBottles(white, count: 5, to: beach)       // Beach: 200 + 100 below
+        addBottles(red, count: 1, to: beach)
+        addBottles(white, count: 1, to: nil)         // No collection: 40
+        white.bottles.filter { $0.collection?.id == beach.id }.prefix(2).enumerated()
+            .forEach { $1.purchasePrice = $0 == 0 ? 30 : 50 }
+
+        let sections = CellarReportSection.sections(for: [red, white])
+        XCTAssertEqual(sections.map(\.scope.title), ["Beach house", "Home", "No collection"])
+        XCTAssertEqual(sections.map(\.total), [300, 100, 40])
+
+        let beachLines = sections[0].lines
+        XCTAssertEqual(beachLines.map(\.wine.name), ["White", "Red"])
+        XCTAssertEqual(beachLines[0].count, 5)
+        XCTAssertEqual(beachLines[0].perBottle, 40)
+        XCTAssertEqual(beachLines[0].paidPerBottle, 40)
+        XCTAssertNil(beachLines[1].paidPerBottle)
+
+        // No collections at all: one section covering everything.
+        let solo = Wine(name: "Solo", manualEstimatedValue: 10)
+        ctx.insert(solo)
+        addBottles(solo, count: 2, to: nil)
+        let single = CellarReportSection.sections(for: [solo])
+        XCTAssertEqual(single.count, 1)
+        XCTAssertEqual(single[0].scope.title, "All collections")
+        _ = try CellarPDFExporter.write([red, white])
+    }
+
     func testDeletingACollectionKeepsItsBottles() throws {
         let home = CellarCollection(name: "Home")
         ctx.insert(home)
