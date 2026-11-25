@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-/// One location's block in the PDF report: its wines (highest value first) and totals.
+/// One location's block in the PDF report: its wines (by style, then year), then spirits.
 struct CellarReportSection {
     struct Line {
         let wine: Wine
@@ -48,14 +48,35 @@ struct CellarReportSection {
                         perBottle: total / Decimal(bottles.count),
                         paidPerBottle: paid.isEmpty ? nil : paid.reduce(Decimal(0), +) / Decimal(paid.count))
         }
-        .sorted { $0.total != $1.total ? $0.total > $1.total : Wine.alphabeticalOrder($0.wine, $1.wine) }
+        .sorted { reportOrder($0.wine, $1.wine) }
         return CellarReportSection(scope: scope, lines: lines)
+    }
+
+    /// Wines first by style (red, white, rosé, sparkling, … in `WineType` order),
+    /// then spirits; within a style by year, oldest first and NV last; then by name.
+    static func reportOrder(_ a: Wine, _ b: Wine) -> Bool {
+        let ka = typeRank(a.type), kb = typeRank(b.type)
+        if ka != kb { return ka < kb }
+        let va = a.vintage ?? .max, vb = b.vintage ?? .max
+        if va != vb { return va < vb }
+        return Wine.alphabeticalOrder(a, b)
+    }
+
+    private static func typeRank(_ type: WineType) -> Int {
+        let index = WineType.allCases.firstIndex(of: type) ?? 0
+        return (type.isSpirit ? 1000 : 0) + index
+    }
+
+    /// The sub-heading a line falls under in the report: its wine style, or "Spirits".
+    static func groupTitle(for type: WineType) -> String {
+        type.isSpirit ? "Spirits" : type.label
     }
 }
 
 /// Renders a one-or-more page PDF report of the cellar: totals up top, then each
-/// location (collection), most valuable first, with a line per wine (vintage/name,
-/// count, rating, price per bottle, price paid per bottle, estimated value).
+/// location (collection), most valuable first. Inside each location wines come by
+/// style (red, white, rosé, …) and year, then spirits, with a line per wine
+/// (vintage/name, count, rating, price per bottle, price paid per bottle, value).
 enum CellarPDFExporter {
 
     static func write(_ wines: [Wine]) throws -> URL {
@@ -77,6 +98,9 @@ enum CellarPDFExporter {
         let headerAttr: [NSAttributedString.Key: Any] = [
             .font: UIFont.boldSystemFont(ofSize: 10),
             .foregroundColor: UIColor.gray]
+        let groupAttr: [NSAttributedString.Key: Any] = [
+            .font: UIFont.italicSystemFont(ofSize: 11),
+            .foregroundColor: UIColor.darkGray]
         let nameStyle = NSMutableParagraphStyle()
         nameStyle.lineBreakMode = .byTruncatingTail
         let rowAttr: [NSAttributedString.Key: Any] = [
@@ -159,11 +183,19 @@ enum CellarPDFExporter {
                 }
                 columnHeaders()
 
+                var currentGroup: String?
                 for line in section.lines {
                     if y > pageRect.height - margin {
                         ctx.beginPage()
                         y = margin
                         columnHeaders()
+                    }
+                    let group = CellarReportSection.groupTitle(for: line.wine.type)
+                    if group != currentGroup {
+                        if currentGroup != nil { y += 4 }
+                        group.draw(at: CGPoint(x: margin, y: y), withAttributes: groupAttr)
+                        y += 16
+                        currentGroup = group
                     }
                     var name = line.wine.displayTitle
                     if let r = line.wine.rating, r > 0 { name += "  \(r)★" }

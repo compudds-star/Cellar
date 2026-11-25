@@ -72,11 +72,11 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(sections.map(\.total), [300, 100, 40])
 
         let beachLines = sections[0].lines
-        XCTAssertEqual(beachLines.map(\.wine.name), ["White", "Red"])
-        XCTAssertEqual(beachLines[0].count, 5)
-        XCTAssertEqual(beachLines[0].perBottle, 40)
-        XCTAssertEqual(beachLines[0].paidPerBottle, 40)
-        XCTAssertNil(beachLines[1].paidPerBottle)
+        XCTAssertEqual(beachLines.map(\.wine.name), ["Red", "White"])
+        XCTAssertEqual(beachLines[1].count, 5)
+        XCTAssertEqual(beachLines[1].perBottle, 40)
+        XCTAssertEqual(beachLines[1].paidPerBottle, 40)
+        XCTAssertNil(beachLines[0].paidPerBottle)
 
         // No collections at all: one section covering everything.
         let solo = Wine(name: "Solo", manualEstimatedValue: 10)
@@ -86,6 +86,27 @@ final class CollectionTests: XCTestCase {
         XCTAssertEqual(single.count, 1)
         XCTAssertEqual(single[0].scope.title, "All collections")
         _ = try CellarPDFExporter.write([red, white])
+    }
+
+    func testReportOrdersWinesByStyleThenYearThenSpirits() {
+        func make(_ name: String, _ type: WineType, _ vintage: Int?) -> Wine {
+            let w = Wine(name: name, vintage: vintage, type: type, manualEstimatedValue: 10)
+            ctx.insert(w)
+            addBottles(w, count: 1, to: nil)
+            return w
+        }
+        let wines = [
+            make("Scotch", .whisky, nil),
+            make("Rosé", .rose, 2022),
+            make("White NV", .white, nil),
+            make("Red 2019", .red, 2019),
+            make("Gin", .gin, nil),
+            make("White 2015", .white, 2015),
+            make("Red 2010", .red, 2010),
+        ]
+        let names = CellarReportSection.sections(for: wines)[0].lines.map(\.wine.name)
+        XCTAssertEqual(names, ["Red 2010", "Red 2019", "White 2015", "White NV", "Rosé", "Scotch", "Gin"])
+        XCTAssertEqual(CellarReportSection.groupTitle(for: .gin), "Spirits")
     }
 
     func testDeletingACollectionKeepsItsBottles() throws {
